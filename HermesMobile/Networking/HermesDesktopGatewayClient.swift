@@ -275,11 +275,6 @@ final class HermesDesktopGatewayClient {
         self.socketFactory = socketFactory
     }
 
-    deinit {
-        receiveTask?.cancel()
-        socket?.cancel(with: .goingAway, reason: nil)
-    }
-
     static func normalizedConfiguration(serverURLString: String, token: String) throws -> HermesDesktopGatewayConfiguration {
         let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedToken.isEmpty else {

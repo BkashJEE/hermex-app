@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Bindable var authManager: AuthManager
+    @Bindable var desktopGatewayAccount: HermesDesktopGatewayAccount
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(ResponseCompletionNotifications.isEnabledKey) private var isResponseCompletionNotificationsEnabled = false
     @State private var pendingSharedImport: SharedImport?
@@ -52,25 +53,43 @@ struct ContentView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch authManager.state {
-        case .unconfigured:
-            OnboardingView(authManager: authManager)
-        case .loggedOut(let server):
-            OnboardingView(authManager: authManager, savedServer: server)
-        case .loggedIn(let server):
-            SessionListView(
-                authManager: authManager,
-                server: server,
-                pendingSharedImport: $pendingSharedImport,
-                pendingDeepLinkedSessionID: $pendingDeepLinkedSessionID,
-                requestedNewChat: $pendingNewChatRequest
+        if let configuration = desktopGatewayAccount.configuration {
+            HermesDesktopGatewayRootView(
+                configuration: configuration,
+                onForget: desktopGatewayAccount.forget
             )
-            // Switching the active server keeps us in `.loggedIn`, so without a
-            // per-server identity SwiftUI would reuse the same SessionListView (and
-            // its server-bound view model), leaving stale sessions/chat on screen.
-            // Keying on the server tears the whole stack down and rebuilds it
-            // against the newly active server (#17).
-            .id(server)
+            .id("\(configuration.serverURL.absoluteString)|\(configuration.token.hashValue)")
+            .task {
+                await desktopGatewayAccount.refreshServedTokenIfAvailable()
+            }
+        } else {
+            switch authManager.state {
+            case .unconfigured:
+                OnboardingView(
+                    authManager: authManager,
+                    desktopGatewayAccount: desktopGatewayAccount
+                )
+            case .loggedOut(let server):
+                OnboardingView(
+                    authManager: authManager,
+                    desktopGatewayAccount: desktopGatewayAccount,
+                    savedServer: server
+                )
+            case .loggedIn(let server):
+                SessionListView(
+                    authManager: authManager,
+                    server: server,
+                    pendingSharedImport: $pendingSharedImport,
+                    pendingDeepLinkedSessionID: $pendingDeepLinkedSessionID,
+                    requestedNewChat: $pendingNewChatRequest
+                )
+                // Switching the active server keeps us in `.loggedIn`, so without a
+                // per-server identity SwiftUI would reuse the same SessionListView (and
+                // its server-bound view model), leaving stale sessions/chat on screen.
+                // Keying on the server tears the whole stack down and rebuilds it
+                // against the newly active server (#17).
+                .id(server)
+            }
         }
     }
 
@@ -134,5 +153,8 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView(authManager: AuthManager())
+    ContentView(
+        authManager: AuthManager(),
+        desktopGatewayAccount: HermesDesktopGatewayAccount()
+    )
 }

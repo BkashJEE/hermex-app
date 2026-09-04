@@ -2,15 +2,22 @@ import SwiftUI
 
 struct OnboardingView: View {
     @Bindable var authManager: AuthManager
+    @Bindable var desktopGatewayAccount: HermesDesktopGatewayAccount
     @State private var viewModel: OnboardingViewModel
     @State private var currentPage: Int
     @State private var hasCopiedAgentPrompt = false
     @State private var hasBypassedCopyReminder = false
     @State private var isShowingCopyReminder = false
+    @State private var isShowingDesktopGatewaySetup = false
     @FocusState private var focusedField: OnboardingConnectField?
 
-    init(authManager: AuthManager, savedServer: URL? = nil) {
+    init(
+        authManager: AuthManager,
+        desktopGatewayAccount: HermesDesktopGatewayAccount,
+        savedServer: URL? = nil
+    ) {
         self.authManager = authManager
+        self.desktopGatewayAccount = desktopGatewayAccount
         // A known server means a re-login, not first-run setup: skip the
         // intro pager and land on the connect page with the server filled in.
         _viewModel = State(
@@ -85,6 +92,9 @@ struct OnboardingView: View {
         } message: {
             Text("Copy the agent setup prompt on your desktop before continuing so Hermes Web UI and Tailscale are configured correctly.")
         }
+        .sheet(isPresented: $isShowingDesktopGatewaySetup) {
+            HermesDesktopGatewaySetupView(account: desktopGatewayAccount)
+        }
     }
 
     private var bottomBar: some View {
@@ -97,6 +107,14 @@ struct OnboardingView: View {
             if currentPage == OnboardingFlowPolicy.connectPageIndex {
                 if !isEditingConnectionField {
                     connectActionButtons
+
+                    Button("Connect to Hermes Desktop") {
+                        isShowingDesktopGatewaySetup = true
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Connects directly to the existing Hermes Desktop gateway and all configured agents.")
                 }
             } else {
                 Button(action: handlePrimaryAction) {
@@ -123,6 +141,16 @@ struct OnboardingView: View {
                     .foregroundStyle(.white.opacity(0.55))
                     .buttonStyle(.plain)
                     .accessibilityHint("Skips setup and opens the connect screen.")
+                }
+
+                if currentPage == 0 {
+                    Button("Connect to Hermes Desktop") {
+                        isShowingDesktopGatewaySetup = true
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Connects directly to the existing Hermes Desktop gateway and all configured agents.")
                 }
             }
         }
@@ -234,5 +262,8 @@ struct OnboardingView: View {
 }
 
 #Preview {
-    OnboardingView(authManager: AuthManager())
+    OnboardingView(
+        authManager: AuthManager(),
+        desktopGatewayAccount: HermesDesktopGatewayAccount()
+    )
 }

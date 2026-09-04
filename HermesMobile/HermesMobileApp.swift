@@ -4,6 +4,7 @@ import SwiftData
 @main
 struct HermesMobileApp: App {
     @State private var authManager = AuthManager()
+    @State private var desktopGatewayAccount = HermesDesktopGatewayAccount()
     @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.system.rawValue
 
     var body: some Scene {
@@ -17,11 +18,11 @@ struct HermesMobileApp: App {
                     StreamingLabView()
                 }
             } else {
-                ContentView(authManager: authManager)
+                ContentView(authManager: authManager, desktopGatewayAccount: desktopGatewayAccount)
                     .preferredColorScheme(AppTheme.storedValue(appThemeRawValue).colorScheme)
             }
             #else
-            ContentView(authManager: authManager)
+            ContentView(authManager: authManager, desktopGatewayAccount: desktopGatewayAccount)
                 .preferredColorScheme(AppTheme.storedValue(appThemeRawValue).colorScheme)
             #endif
         }

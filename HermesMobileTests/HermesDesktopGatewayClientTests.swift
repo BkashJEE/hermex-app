@@ -214,17 +214,15 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
         let configuration = try HermesDesktopGatewayClient.pairingConfiguration(
             from: try XCTUnwrap(pairingCode.string)
         )
-        let client = HermesDesktopGatewayClient(configuration: configuration)
-        let completed = expectation(description: "Hermes Desktop emitted message.complete")
-        var completedEvent: HermesDesktopGatewayEvent?
-        let observerID = client.observeEvents { event in
-            guard event.type == "message.complete" else { return }
-            completedEvent = event
-            completed.fulfill()
-        }
+        let trustDelegate = HermesGatewayFixtureTrustDelegate()
+        let gatewaySession = URLSession(configuration: .ephemeral, delegate: trustDelegate, delegateQueue: nil)
+        let client = HermesDesktopGatewayClient(
+            configuration: configuration,
+            socketFactory: { gatewaySession.webSocketTask(with: $0) }
+        )
         defer {
-            client.removeEventObserver(observerID)
             client.disconnect()
+            gatewaySession.invalidateAndCancel()
         }
 
         do {
@@ -238,6 +236,15 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
 #endif
         }
         XCTAssertEqual(client.state, .connected)
+
+        let completed = expectation(description: "Hermes Desktop emitted message.complete")
+        var completedEvent: HermesDesktopGatewayEvent?
+        let observerID = client.observeEvents { event in
+            guard event.type == "message.complete" else { return }
+            completedEvent = event
+            completed.fulfill()
+        }
+        defer { client.removeEventObserver(observerID) }
 
         let profiles = try await client.listProfiles(includeSessions: true)
         XCTAssertEqual(profiles.map(\.name), ["default", "research", "qa"])
@@ -265,6 +272,25 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
             completedEvent?.payload["echo"],
             .string("Reply with the Hermes mobile gateway receipt")
         )
+    }
+}
+
+private final class HermesGatewayFixtureTrustDelegate: NSObject, URLSessionDelegate {
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+#if HERMES_GATEWAY_CI
+        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+           challenge.protectionSpace.host == "127.0.0.1",
+           challenge.protectionSpace.port == 18_791,
+           let trust = challenge.protectionSpace.serverTrust {
+            completionHandler(.useCredential, URLCredential(trust: trust))
+            return
+        }
+#endif
+        completionHandler(.performDefaultHandling, nil)
     }
 }
 

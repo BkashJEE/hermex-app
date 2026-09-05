@@ -204,13 +204,11 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
 
     @MainActor
     func testLiveTLSGatewayDiscoversAllProfilesAndCompletesPrompt() async throws {
-        let environment = ProcessInfo.processInfo.environment
-        guard let serverURL = environment["HERMES_DESKTOP_INTEGRATION_URL"],
+        let testBundle = Bundle(for: HermesDesktopGatewayClientTests.self)
+        guard let serverURL = testBundle.object(forInfoDictionaryKey: "HermesDesktopIntegrationURL") as? String,
               !serverURL.isEmpty,
-              !serverURL.hasPrefix("$("),
-              let token = environment["HERMES_DESKTOP_INTEGRATION_TOKEN"],
-              !token.isEmpty,
-              !token.hasPrefix("$(")
+              let token = testBundle.object(forInfoDictionaryKey: "HermesDesktopIntegrationToken") as? String,
+              !token.isEmpty
         else {
             throw XCTSkip("The live Hermes Desktop gateway fixture is enabled in PR CI.")
         }

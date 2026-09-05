@@ -185,8 +185,8 @@ jobs:
             -destination "platform=iOS Simulator,name=${SIMULATOR_NAME}" \
             -resultBundlePath TestResults.xcresult \
             -parallel-testing-enabled NO \
-            HERMES_DESKTOP_INTEGRATION_URL="${integration_url}" \
-            HERMES_DESKTOP_INTEGRATION_TOKEN="${MOCK_GATEWAY_TOKEN}" \
+            INFOPLIST_KEY_HermesDesktopIntegrationURL="${integration_url}" \
+            INFOPLIST_KEY_HermesDesktopIntegrationToken="${MOCK_GATEWAY_TOKEN}" \
             CODE_SIGNING_ALLOWED=NO
 
           python3 - "${evidence_dir}/receipt.json" <<'PY'

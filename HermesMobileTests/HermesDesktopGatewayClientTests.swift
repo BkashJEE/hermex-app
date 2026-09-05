@@ -42,7 +42,7 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
 
     func testExtractsServedDashboardTokenWithoutEvaluatingPageScript() {
         let html = #"<html><script>window.__HERMES_SESSION_TOKEN__="a/b\"c+d";</script></html>"#
-        XCTAssertEqual(HermesDesktopGatewayClient.extractServedToken(from: html), #"a/b\"c+d"#)
+        XCTAssertEqual(HermesDesktopGatewayClient.extractServedToken(from: html), "a/b\"c+d")
         XCTAssertNil(HermesDesktopGatewayClient.extractServedToken(from: "<html>No token</html>"))
     }
 

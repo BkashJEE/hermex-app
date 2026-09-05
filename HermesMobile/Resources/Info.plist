@@ -52,6 +52,8 @@
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Hermex needs microphone access to dictate text into the message composer.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Hermes uses the camera only to scan a Hermes Desktop mobile pairing code.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Hermes uses your local network to connect to your configured Hermes Desktop gateway.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

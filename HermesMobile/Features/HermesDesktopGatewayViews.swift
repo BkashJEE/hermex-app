@@ -5,6 +5,8 @@ struct HermesDesktopGatewaySetupView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var serverURLString = ""
     @State private var token = ""
+    @State private var showsPairingScanner = false
+    @State private var pairingScanError: String?
 
     private var canConnect: Bool {
         !serverURLString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -15,6 +17,13 @@ struct HermesDesktopGatewaySetupView: View {
         NavigationStack {
             Form {
                 Section {
+                    Button {
+                        showsPairingScanner = true
+                    } label: {
+                        Label("Scan desktop pairing code", systemImage: "qrcode.viewfinder")
+                            .frame(maxWidth: .infinity)
+                    }
+
                     TextField("https://desktop.your-tailnet.ts.net", text: $serverURLString)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -73,6 +82,30 @@ struct HermesDesktopGatewaySetupView: View {
         }
         .preferredColorScheme(.dark)
         .interactiveDismissDisabled(account.isConnecting)
+        .sheet(isPresented: $showsPairingScanner) {
+            HermesDesktopPairingScannerSheet { payload in
+                do {
+                    let configuration = try HermesDesktopGatewayClient.pairingConfiguration(from: payload)
+                    serverURLString = configuration.serverURL.absoluteString
+                    token = configuration.token
+                    showsPairingScanner = false
+                } catch {
+                    pairingScanError = error.localizedDescription
+                    showsPairingScanner = false
+                }
+            }
+        }
+        .alert(
+            "Pairing code not recognized",
+            isPresented: Binding(
+                get: { pairingScanError != nil },
+                set: { if !$0 { pairingScanError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(pairingScanError ?? "Scan the code shown by Hermes Desktop.")
+        }
     }
 }
 

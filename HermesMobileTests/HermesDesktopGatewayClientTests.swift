@@ -40,6 +40,27 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
         }
     }
 
+    func testParsesDesktopPairingCodeWithEncodedGatewayAndToken() throws {
+        let configuration = try HermesDesktopGatewayClient.pairingConfiguration(
+            from: "hermes-agent://desktop-pair?server=https%3A%2F%2Fdesktop.example.com%3A9443&token=a%2Fb%20c%2Bd"
+        )
+
+        XCTAssertEqual(configuration.serverURL.absoluteString, "https://desktop.example.com:9443")
+        XCTAssertEqual(configuration.token, "a/b c+d")
+    }
+
+    func testRejectsForeignOrIncompleteDesktopPairingCode() {
+        for payload in [
+            "https://desktop.example.com",
+            "hermes-agent://new-chat?server=https://desktop.example.com&token=secret",
+            "hermes-agent://desktop-pair?server=https://desktop.example.com",
+        ] {
+            XCTAssertThrowsError(try HermesDesktopGatewayClient.pairingConfiguration(from: payload)) { error in
+                XCTAssertEqual(error as? HermesDesktopGatewayError, .invalidPairingCode)
+            }
+        }
+    }
+
     func testExtractsServedDashboardTokenWithoutEvaluatingPageScript() {
         let html = #"<html><script>window.__HERMES_SESSION_TOKEN__="a/b\"c+d";</script></html>"#
         XCTAssertEqual(HermesDesktopGatewayClient.extractServedToken(from: html), "a/b\"c+d")

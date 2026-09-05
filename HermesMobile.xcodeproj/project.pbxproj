@@ -44,6 +44,7 @@
 		D35A00000000000000000001 /* HermesDesktopGatewayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35A00000000000000000011 /* HermesDesktopGatewayClient.swift */; };
 		D35A00000000000000000002 /* HermesDesktopGatewayClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35A00000000000000000012 /* HermesDesktopGatewayClientTests.swift */; };
 		D35A00000000000000000003 /* HermesDesktopGatewayViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35A00000000000000000013 /* HermesDesktopGatewayViews.swift */; };
+		D35A00000000000000000004 /* HermesDesktopPairingScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35A00000000000000000014 /* HermesDesktopPairingScanner.swift */; };
 		1A2B3C4D5E6F7000000000A3 /* APIError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7000000000B3 /* APIError.swift */; };
 		C04400000000000000000001 /* CacheFallbackPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C04400000000000000000002 /* CacheFallbackPolicy.swift */; };
 		1A2B3C4D5E6F7000000000A4 /* ServerInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7000000000B4 /* ServerInfo.swift */; };
@@ -357,6 +358,7 @@
 		D35A00000000000000000011 /* HermesDesktopGatewayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesDesktopGatewayClient.swift; sourceTree = "<group>"; };
 		D35A00000000000000000012 /* HermesDesktopGatewayClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesDesktopGatewayClientTests.swift; sourceTree = "<group>"; };
 		D35A00000000000000000013 /* HermesDesktopGatewayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesDesktopGatewayViews.swift; sourceTree = "<group>"; };
+		D35A00000000000000000014 /* HermesDesktopPairingScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HermesDesktopPairingScanner.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7000000000B3 /* APIError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIError.swift; sourceTree = "<group>"; };
 		C04400000000000000000002 /* CacheFallbackPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheFallbackPolicy.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7000000000B4 /* ServerInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerInfo.swift; sourceTree = "<group>"; };
@@ -847,6 +849,7 @@
 			isa = PBXGroup;
 			children = (
 				D35A00000000000000000013 /* HermesDesktopGatewayViews.swift */,
+				D35A00000000000000000014 /* HermesDesktopPairingScanner.swift */,
 				1A2B3C4D5E6F7000000000C4 /* Onboarding */,
 				C09300000000000000000010 /* Shared */,
 				1A2B3C4D5E6F7000000000C5 /* SessionList */,
@@ -1324,6 +1327,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D35A00000000000000000003 /* HermesDesktopGatewayViews.swift in Sources */,
+				D35A00000000000000000004 /* HermesDesktopPairingScanner.swift in Sources */,
 				D35A00000000000000000001 /* HermesDesktopGatewayClient.swift in Sources */,
 				1A2B3C4D5E6F700000000001 /* HermesMobileApp.swift in Sources */,
 				1A2B3C4D5E6F700000000002 /* ContentView.swift in Sources */,

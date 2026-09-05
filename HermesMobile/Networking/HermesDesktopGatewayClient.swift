@@ -3,6 +3,7 @@ import Observation
 
 enum HermesDesktopGatewayError: LocalizedError, Equatable {
     case invalidServerURL
+    case invalidPairingCode
     case missingToken
     case tokenDiscoveryFailed(String)
     case notConnected
@@ -16,6 +17,8 @@ enum HermesDesktopGatewayError: LocalizedError, Equatable {
         switch self {
         case .invalidServerURL:
             String(localized: "Enter a valid Hermes Desktop gateway URL.")
+        case .invalidPairingCode:
+            String(localized: "This is not a valid Hermes Desktop mobile pairing code.")
         case .missingToken:
             String(localized: "Enter the Hermes Desktop gateway token.")
         case .tokenDiscoveryFailed(let reason):
@@ -285,6 +288,25 @@ final class HermesDesktopGatewayClient {
             serverURL: try normalizedServerURL(serverURLString),
             token: trimmedToken
         )
+    }
+
+    nonisolated static func pairingConfiguration(from payload: String) throws -> HermesDesktopGatewayConfiguration {
+        guard let components = URLComponents(
+            string: payload.trimmingCharacters(in: .whitespacesAndNewlines)
+        ),
+        components.scheme?.lowercased().hasPrefix("hermes-agent") == true,
+        components.host?.lowercased() == "desktop-pair",
+        let serverURLString = components.queryItems?.first(where: { $0.name == "server" })?.value,
+        let token = components.queryItems?.first(where: { $0.name == "token" })?.value
+        else {
+            throw HermesDesktopGatewayError.invalidPairingCode
+        }
+
+        do {
+            return try normalizedConfiguration(serverURLString: serverURLString, token: token)
+        } catch {
+            throw HermesDesktopGatewayError.invalidPairingCode
+        }
     }
 
     nonisolated static func normalizedServerURL(_ serverURLString: String) throws -> URL {

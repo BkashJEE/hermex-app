@@ -275,7 +275,7 @@ final class HermesDesktopGatewayClient {
         self.socketFactory = socketFactory
     }
 
-    static func normalizedConfiguration(serverURLString: String, token: String) throws -> HermesDesktopGatewayConfiguration {
+    nonisolated static func normalizedConfiguration(serverURLString: String, token: String) throws -> HermesDesktopGatewayConfiguration {
         let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedToken.isEmpty else {
             throw HermesDesktopGatewayError.missingToken
@@ -287,7 +287,7 @@ final class HermesDesktopGatewayClient {
         )
     }
 
-    static func normalizedServerURL(_ serverURLString: String) throws -> URL {
+    nonisolated static func normalizedServerURL(_ serverURLString: String) throws -> URL {
         var raw = serverURLString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else {
             throw HermesDesktopGatewayError.invalidServerURL
@@ -316,7 +316,7 @@ final class HermesDesktopGatewayClient {
         return serverURL
     }
 
-    static func discoverServedToken(
+    nonisolated static func discoverServedToken(
         serverURL: URL,
         session: URLSession = .shared
     ) async throws -> String {
@@ -353,7 +353,7 @@ final class HermesDesktopGatewayClient {
         }
     }
 
-    static func extractServedToken(from html: String) -> String? {
+    nonisolated static func extractServedToken(from html: String) -> String? {
         let pattern = #"window\.__HERMES_SESSION_TOKEN__\s*=\s*(\"(?:\\.|[^\"\\])*\")"#
         guard let expression = try? NSRegularExpression(pattern: pattern),
               let match = expression.firstMatch(
@@ -370,7 +370,7 @@ final class HermesDesktopGatewayClient {
         return token
     }
 
-    static func webSocketURL(for configuration: HermesDesktopGatewayConfiguration) throws -> URL {
+    nonisolated static func webSocketURL(for configuration: HermesDesktopGatewayConfiguration) throws -> URL {
         guard var components = URLComponents(url: configuration.serverURL, resolvingAgainstBaseURL: false) else {
             throw HermesDesktopGatewayError.invalidServerURL
         }

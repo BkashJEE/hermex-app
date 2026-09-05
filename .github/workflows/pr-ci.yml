@@ -166,7 +166,7 @@ jobs:
 
           gateway_ready=false
           for _ in {1..40}; do
-            if [[ "$(curl --insecure --silent --output /dev/null --write-out '%{http_code}' "https://localhost:${MOCK_GATEWAY_PORT}/" || true)" == "401" ]]; then
+            if [[ "$(curl --insecure --silent --output /dev/null --write-out '%{http_code}' "https://127.0.0.1:${MOCK_GATEWAY_PORT}/" || true)" == "401" ]]; then
               gateway_ready=true
               break
             fi
@@ -178,17 +178,21 @@ jobs:
             exit 1
           fi
 
-          integration_url="https://localhost:${MOCK_GATEWAY_PORT}"
-          if [[ "${integration_url}" != "https://localhost:18791" || "${MOCK_GATEWAY_TOKEN}" != "hermes-mobile-ci-token" ]]; then
+          integration_url="https://127.0.0.1:${MOCK_GATEWAY_PORT}"
+          if [[ "${integration_url}" != "https://127.0.0.1:18791" || "${MOCK_GATEWAY_TOKEN}" != "hermes-mobile-ci-token" ]]; then
             echo "The XCTest fixture constants and CI gateway configuration have drifted." >&2
             exit 1
           fi
+
+          integration_test='HermesMobileTests/HermesDesktopGatewayClientTests/testLiveTLSGatewayDiscoversAllProfilesAndCompletesPrompt'
           xcodebuild test \
             -project "${PROJECT_PATH}" \
             -scheme "${SCHEME}" \
             -destination "platform=iOS Simulator,name=${SIMULATOR_NAME}" \
-            -resultBundlePath TestResults.xcresult \
+            -resultBundlePath GatewayIntegration.xcresult \
             -parallel-testing-enabled NO \
+            -only-testing:"${integration_test}" \
+            'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) HERMES_GATEWAY_CI' \
             CODE_SIGNING_ALLOWED=NO
 
           python3 - "${evidence_dir}/receipt.json" <<'PY'
@@ -200,6 +204,8 @@ jobs:
           if not receipt_path.is_file():
               raise SystemExit("Hermes gateway integration receipt was not written")
           receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+          if receipt.get("websocket_connections") != 1:
+              raise SystemExit(f"expected one authenticated WebSocket connection: {receipt.get('websocket_connections')!r}")
           expected_methods = ["profiles.list", "session.create", "prompt.submit"]
           if receipt.get("methods") != expected_methods:
               raise SystemExit(f"unexpected gateway methods: {receipt.get('methods')!r}")
@@ -211,6 +217,15 @@ jobs:
               raise SystemExit("prompt receipt did not match the iOS request")
           print(json.dumps(receipt, indent=2))
           PY
+
+          xcodebuild test \
+            -project "${PROJECT_PATH}" \
+            -scheme "${SCHEME}" \
+            -destination "platform=iOS Simulator,name=${SIMULATOR_NAME}" \
+            -resultBundlePath TestResults.xcresult \
+            -parallel-testing-enabled NO \
+            -skip-testing:"${integration_test}" \
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Compile for a physical iPhone
         run: |
@@ -227,7 +242,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: test-results
-          path: TestResults.xcresult
+          path: |
+            GatewayIntegration.xcresult
+            TestResults.xcresult
           if-no-files-found: ignore
 
       - name: Upload Hermes gateway integration evidence

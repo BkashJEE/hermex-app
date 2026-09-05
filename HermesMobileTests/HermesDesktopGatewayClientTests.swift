@@ -208,7 +208,7 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
         pairingCode.scheme = "hermes-agent"
         pairingCode.host = "desktop-pair"
         pairingCode.queryItems = [
-            URLQueryItem(name: "server", value: "https://localhost:18791"),
+            URLQueryItem(name: "server", value: "https://127.0.0.1:18791"),
             URLQueryItem(name: "token", value: "hermes-mobile-ci-token"),
         ]
         let configuration = try HermesDesktopGatewayClient.pairingConfiguration(
@@ -230,7 +230,12 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
         do {
             try await client.connect(timeout: .seconds(2))
         } catch {
+#if HERMES_GATEWAY_CI
+            XCTFail("Hermes Desktop gateway integration failed: \(error.localizedDescription)")
+            return
+#else
             throw XCTSkip("The live Hermes Desktop gateway fixture is enabled in PR CI: \(error.localizedDescription)")
+#endif
         }
         XCTAssertEqual(client.state, .connected)
 

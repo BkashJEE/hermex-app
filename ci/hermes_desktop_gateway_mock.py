@@ -10,6 +10,7 @@ import json
 import socket
 import ssl
 import struct
+import sys
 import threading
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -73,15 +74,40 @@ class Receipt:
     def __init__(self, path: Path) -> None:
         self.path = path
         self.lock = threading.Lock()
-        self.connections = 0
+        self.tcp_connections = 0
+        self.tls_connections = 0
+        self.http_paths: list[str] = []
+        self.websocket_connections = 0
+        self.connection_errors: list[str] = []
         self.methods: list[str] = []
         self.profiles_requested = False
         self.created_profile: str | None = None
         self.prompt_text: str | None = None
 
-    def connected(self) -> None:
+    def tcp_connected(self) -> None:
         with self.lock:
-            self.connections += 1
+            self.tcp_connections += 1
+            self._write()
+
+    def tls_connected(self) -> None:
+        with self.lock:
+            self.tls_connections += 1
+            self._write()
+
+    def http_requested(self, path: str) -> None:
+        with self.lock:
+            self.http_paths.append(path)
+            self._write()
+
+    def websocket_connected(self) -> None:
+        with self.lock:
+            self.websocket_connections += 1
+            self._write()
+
+    def connection_failed(self, error: BaseException) -> None:
+        error_name = type(error).__name__
+        with self.lock:
+            self.connection_errors.append(error_name)
             self._write()
 
     def record(self, method: str, params: dict[str, object]) -> None:
@@ -100,7 +126,11 @@ class Receipt:
     def _write(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
-            "connections": self.connections,
+            "tcp_connections": self.tcp_connections,
+            "tls_connections": self.tls_connections,
+            "http_paths": self.http_paths,
+            "websocket_connections": self.websocket_connections,
+            "connection_errors": self.connection_errors,
             "methods": self.methods,
             "profiles_requested_with_sessions": self.profiles_requested,
             "created_profile": self.created_profile,
@@ -122,14 +152,18 @@ class HermesGatewayFixture:
         with socket.create_server((self.host, self.port), reuse_port=False) as listener:
             while True:
                 raw_connection, _ = listener.accept()
+                self.receipt.tcp_connected()
                 thread = threading.Thread(target=self._handle_safely, args=(raw_connection,), daemon=True)
                 thread.start()
 
     def _handle_safely(self, raw_connection: socket.socket) -> None:
         try:
             with self.context.wrap_socket(raw_connection, server_side=True) as connection:
+                self.receipt.tls_connected()
                 self._handle(connection)
-        except (ConnectionError, OSError, ssl.SSLError, ValueError, json.JSONDecodeError):
+        except (ConnectionError, OSError, ssl.SSLError, ValueError, json.JSONDecodeError) as error:
+            self.receipt.connection_failed(error)
+            print(f"Hermes gateway fixture connection failed: {type(error).__name__}", file=sys.stderr, flush=True)
             raw_connection.close()
 
     def _handle(self, connection: ssl.SSLSocket) -> None:
@@ -149,7 +183,9 @@ class HermesGatewayFixture:
             for name, value in [line.split(":", 1)]
         }
         query = parse_qs(urlsplit(target).query)
-        if method != "GET" or urlsplit(target).path != "/api/ws" or query.get("token") != [self.token]:
+        path = urlsplit(target).path
+        self.receipt.http_requested(path)
+        if method != "GET" or path != "/api/ws" or query.get("token") != [self.token]:
             connection.sendall(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n")
             return
 
@@ -163,7 +199,7 @@ class HermesGatewayFixture:
             f"Sec-WebSocket-Accept: {websocket_accept(key)}\r\n\r\n"
         )
         connection.sendall(response.encode("ascii"))
-        self.receipt.connected()
+        self.receipt.websocket_connected()
         send_json(
             connection,
             {"jsonrpc": "2.0", "method": "event", "params": {"type": "gateway.ready", "payload": {}}},

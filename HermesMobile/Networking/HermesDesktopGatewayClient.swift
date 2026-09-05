@@ -294,7 +294,7 @@ final class HermesDesktopGatewayClient {
         guard let components = URLComponents(
             string: payload.trimmingCharacters(in: .whitespacesAndNewlines)
         ),
-        components.scheme?.lowercased().hasPrefix("hermes-agent") == true,
+        components.scheme?.lowercased() == "hermes-agent",
         components.host?.lowercased() == "desktop-pair",
         let serverURLString = components.queryItems?.first(where: { $0.name == "server" })?.value,
         let token = components.queryItems?.first(where: { $0.name == "token" })?.value

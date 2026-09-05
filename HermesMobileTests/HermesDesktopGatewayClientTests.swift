@@ -52,6 +52,7 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
     func testRejectsForeignOrIncompleteDesktopPairingCode() {
         for payload in [
             "https://desktop.example.com",
+            "hermes-agent-evil://desktop-pair?server=https://desktop.example.com&token=secret",
             "hermes-agent://new-chat?server=https://desktop.example.com&token=secret",
             "hermes-agent://desktop-pair?server=https://desktop.example.com",
         ] {

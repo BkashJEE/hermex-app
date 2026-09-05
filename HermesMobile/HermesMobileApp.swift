@@ -3,7 +3,6 @@ import SwiftData
 
 @main
 struct HermesMobileApp: App {
-    @State private var authManager = AuthManager()
     @State private var desktopGatewayAccount = HermesDesktopGatewayAccount()
     @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.system.rawValue
 
@@ -12,17 +11,17 @@ struct HermesMobileApp: App {
             #if DEBUG
             // Launch argument hook so the Streaming Lab can be opened without
             // UI navigation (agent-driven simulator diagnosis, issue #234):
-            // `xcrun simctl launch <udid> com.uzairansar.hermesmobile --streaming-lab`
+            // `xcrun simctl launch <udid> com.bkashjee.hermesmobile --streaming-lab`
             if ProcessInfo.processInfo.arguments.contains("--streaming-lab") {
                 NavigationStack {
                     StreamingLabView()
                 }
             } else {
-                ContentView(authManager: authManager, desktopGatewayAccount: desktopGatewayAccount)
+                ContentView(desktopGatewayAccount: desktopGatewayAccount)
                     .preferredColorScheme(AppTheme.storedValue(appThemeRawValue).colorScheme)
             }
             #else
-            ContentView(authManager: authManager, desktopGatewayAccount: desktopGatewayAccount)
+            ContentView(desktopGatewayAccount: desktopGatewayAccount)
                 .preferredColorScheme(AppTheme.storedValue(appThemeRawValue).colorScheme)
             #endif
         }

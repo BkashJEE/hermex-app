@@ -1,11 +1,35 @@
 import SwiftUI
 
+private extension Color {
+    static var hermesGold: Color { Color(red: 0.91, green: 0.72, blue: 0.24) }
+    static var hermesSurface: Color { Color(red: 0.09, green: 0.09, blue: 0.09) }
+    static var hermesElevatedSurface: Color { Color(red: 0.13, green: 0.13, blue: 0.13) }
+    static var hermesDivider: Color { Color.white.opacity(0.13) }
+    static var hermesSecondaryText: Color { Color(red: 0.56, green: 0.56, blue: 0.58) }
+    static var hermesDanger: Color { Color(red: 0.96, green: 0.38, blue: 0.39) }
+}
+
+private extension View {
+    func hermesInputStyle() -> some View {
+        self
+            .font(.system(size: 15))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 50)
+            .background(Color.hermesSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.hermesDivider, lineWidth: 1)
+            }
+    }
+}
+
 struct HermesDesktopGatewaySetupView: View {
     @Bindable var account: HermesDesktopGatewayAccount
-    @Environment(\.dismiss) private var dismiss
     @State private var serverURLString = ""
     @State private var token = ""
     @State private var showsPairingScanner = false
+    @State private var showsManualEntry = false
     @State private var pairingScanError: String?
 
     private var canConnect: Bool {
@@ -14,81 +38,132 @@ struct HermesDesktopGatewaySetupView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 54)
+
+                    Text("PAIR WITH HERMES DESKTOP")
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .tracking(1.1)
+                        .foregroundStyle(Color.hermesGold)
+
+                    Text("Scan the code on your desktop")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 30)
+
+                    Text("Desktop → Settings → Gateways → Hermes mobile companion")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.hermesSecondaryText)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 8)
+
                     Button {
                         showsPairingScanner = true
                     } label: {
-                        Label("Scan desktop pairing code", systemImage: "qrcode.viewfinder")
-                            .frame(maxWidth: .infinity)
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color.hermesSurface)
+                            HermesPairingCornerFrame()
+                                .stroke(Color.hermesGold, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                                .padding(18)
+                            Image(systemName: "qrcode.viewfinder")
+                                .font(.system(size: 48, weight: .light))
+                                .foregroundStyle(.white.opacity(0.54))
+                        }
+                        .frame(height: 224)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Scan Hermes Desktop pairing code")
+                    .padding(.top, 28)
+
+                    Text("Tap to open the camera")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Color.hermesSecondaryText)
+                        .padding(.top, 14)
+
+                    if showsManualEntry {
+                        VStack(spacing: 12) {
+                            TextField("https://desktop.your-tailnet.ts.net", text: $serverURLString)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .keyboardType(.URL)
+                                .textContentType(.URL)
+                                .hermesInputStyle()
+
+                            SecureField("Gateway token", text: $token)
+                                .textContentType(.password)
+                                .hermesInputStyle()
+
+                            Button {
+                                Task {
+                                    _ = await account.configure(serverURLString: serverURLString, token: token)
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    if account.isConnecting {
+                                        ProgressView().tint(.black)
+                                    }
+                                    Text(account.isConnecting ? "Connecting…" : "Pair phone")
+                                        .fontWeight(.semibold)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 50)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.black)
+                            .background(Color.hermesGold, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .disabled(!canConnect)
+                            .opacity(canConnect ? 1 : 0.45)
+                        }
+                        .padding(.top, 28)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    } else {
+                        Button("Enter address and code instead") {
+                            withAnimation(.easeOut(duration: 0.18)) {
+                                showsManualEntry = true
+                            }
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(Color.hermesSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .padding(.top, 54)
                     }
 
-                    TextField("https://desktop.your-tailnet.ts.net", text: $serverURLString)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                        .textContentType(.URL)
-
-                    SecureField("Gateway token (optional)", text: $token)
-                        .textContentType(.password)
-                } header: {
-                    Text("Hermes Desktop gateway")
-                } footer: {
-                    Text("Enter the HTTPS or Tailscale address that reaches Hermes Desktop. The app discovers the served token when possible; paste it only as a fallback. It is stored only in this iPhone's Keychain.")
-                }
-
-                Section {
-                    LabeledContent("Transport", value: "Native WebSocket")
-                    LabeledContent("Endpoint", value: "/api/ws")
-                    LabeledContent("Agent hosting", value: "Hermes Desktop")
-                } header: {
-                    Text("Connection")
-                }
-
-                if let error = account.lastErrorMessage {
-                    Section {
+                    if let error = account.lastErrorMessage {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
+                            .font(.footnote)
+                            .foregroundStyle(Color.hermesDanger)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 16)
                     }
-                }
 
-                Section {
-                    Button {
-                        Task {
-                            if await account.configure(serverURLString: serverURLString, token: token) {
-                                dismiss()
-                            }
-                        }
-                    } label: {
-                        HStack {
-                            if account.isConnecting {
-                                ProgressView()
-                            }
-                            Text(account.isConnecting ? "Verifying gateway…" : "Connect to Hermes Desktop")
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .disabled(!canConnect)
+                    Text("Pairing stores a device token in this iPhone's Keychain. The phone remains a thin node on your existing gateway.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.hermesSecondaryText.opacity(0.72))
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 22)
+                        .padding(.bottom, 24)
                 }
-            }
-            .navigationTitle("Connect")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
+                .padding(.horizontal, 28)
             }
         }
         .preferredColorScheme(.dark)
-        .interactiveDismissDisabled(account.isConnecting)
         .sheet(isPresented: $showsPairingScanner) {
             HermesDesktopPairingScannerSheet { payload in
                 do {
                     let configuration = try HermesDesktopGatewayClient.pairingConfiguration(from: payload)
-                    serverURLString = configuration.serverURL.absoluteString
-                    token = configuration.token
                     showsPairingScanner = false
+                    Task {
+                        _ = await account.configure(
+                            serverURLString: configuration.serverURL.absoluteString,
+                            token: configuration.token
+                        )
+                    }
                 } catch {
                     pairingScanError = error.localizedDescription
                     showsPairingScanner = false
@@ -106,6 +181,28 @@ struct HermesDesktopGatewaySetupView: View {
         } message: {
             Text(pairingScanError ?? "Scan the code shown by Hermes Desktop.")
         }
+    }
+}
+
+private struct HermesPairingCornerFrame: Shape {
+    func path(in rect: CGRect) -> Path {
+        let length = min(rect.width, rect.height) * 0.18
+        var path = Path()
+
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY + length))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX + length, y: rect.minY))
+        path.move(to: CGPoint(x: rect.maxX - length, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + length))
+        path.move(to: CGPoint(x: rect.maxX, y: rect.maxY - length))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX - length, y: rect.maxY))
+        path.move(to: CGPoint(x: rect.minX + length, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - length))
+
+        return path
     }
 }
 
@@ -187,25 +284,102 @@ private struct HermesDesktopGatewayRosterView: View {
     @State private var errorMessage: String?
     @State private var showsNewRunPicker = false
     @State private var showsAppearance = false
+    @State private var showsUpdates = false
     @State private var eventObserverID: UUID?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            Color(.systemBackground).ignoresSafeArea()
+            Color.black.ignoresSafeArea()
 
-            Group {
-                if isLoading && profiles.isEmpty {
-                    ProgressView("Loading Hermes agents…")
-                } else if let errorMessage, profiles.isEmpty {
-                    ContentUnavailableView {
-                        Label("Gateway unavailable", systemImage: "network.slash")
-                    } description: {
-                        Text(errorMessage)
-                    } actions: {
-                        Button("Retry") { Task { await connectAndLoad() } }
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Text("Hermes")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(.white)
+                    Circle()
+                        .fill(connectionColor)
+                        .frame(width: 7, height: 7)
+                    Text(connectionTitle)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Color.hermesSecondaryText)
+                    Spacer()
+                    Button {
+                        showsUpdates = true
+                    } label: {
+                        Label("Updates", systemImage: "bell.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.82))
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 36)
+                            .background(Color.hermesElevatedSurface, in: Capsule())
                     }
-                } else {
-                    profileList
+                    .buttonStyle(.plain)
+
+                    Menu {
+                        Button {
+                            Task { await connectAndLoad() }
+                        } label: {
+                            Label("Refresh agents", systemImage: "arrow.clockwise")
+                        }
+                        Button {
+                            showsAppearance = true
+                        } label: {
+                            Label("Appearance", systemImage: "paintpalette")
+                        }
+                        Button(role: .destructive) {
+                            client.disconnect()
+                            onForget()
+                        } label: {
+                            Label("Forget gateway", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+                .background(Color.black)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(Color.hermesDivider).frame(height: 1)
+                }
+
+                Group {
+                    if isLoading && profiles.isEmpty {
+                        VStack(spacing: 12) {
+                            ProgressView().tint(Color.hermesGold)
+                            Text("Loading Hermes agents…")
+                                .font(.footnote)
+                                .foregroundStyle(Color.hermesSecondaryText)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if let errorMessage, profiles.isEmpty {
+                        VStack(spacing: 14) {
+                            Image(systemName: "network.slash")
+                                .font(.system(size: 28, weight: .light))
+                                .foregroundStyle(Color.hermesGold)
+                            Text("Gateway unavailable")
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                            Text(errorMessage)
+                                .font(.footnote)
+                                .foregroundStyle(Color.hermesSecondaryText)
+                                .multilineTextAlignment(.center)
+                            Button("Retry") { Task { await connectAndLoad() } }
+                                .foregroundStyle(.black)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 18)
+                                .frame(minHeight: 44)
+                                .background(Color.hermesGold, in: Capsule())
+                        }
+                        .padding(28)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        profileList
+                    }
                 }
             }
 
@@ -219,41 +393,14 @@ private struct HermesDesktopGatewayRosterView: View {
                         .frame(minHeight: 50)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(Color.hermesGold)
+                .foregroundStyle(.black)
                 .clipShape(Capsule())
                 .padding(20)
                 .accessibilityHint("Choose an agent and start a new Hermes session.")
             }
         }
-        .navigationTitle("Hermes")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                HermesGatewayConnectionLabel(state: client.state)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        Task { await connectAndLoad() }
-                    } label: {
-                        Label("Refresh agents", systemImage: "arrow.clockwise")
-                    }
-                    Button {
-                        showsAppearance = true
-                    } label: {
-                        Label("Appearance", systemImage: "paintpalette")
-                    }
-                    Button(role: .destructive) {
-                        client.disconnect()
-                        onForget()
-                    } label: {
-                        Label("Forget gateway", systemImage: "rectangle.portrait.and.arrow.right")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .frame(width: 44, height: 44)
-                }
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .confirmationDialog("Start a new run", isPresented: $showsNewRunPicker, titleVisibility: .visible) {
             ForEach(profiles) { profile in
                 Button(profile.displayName) { onOpenProfile(profile, true) }
@@ -264,6 +411,9 @@ private struct HermesDesktopGatewayRosterView: View {
         }
         .sheet(isPresented: $showsAppearance) {
             HermesGatewayAppearanceSheet()
+        }
+        .sheet(isPresented: $showsUpdates) {
+            HermesGatewayUpdatesSheet(profiles: profiles)
         }
         .task {
             installEventObserverIfNeeded()
@@ -278,41 +428,81 @@ private struct HermesDesktopGatewayRosterView: View {
     }
 
     private var profileList: some View {
-        List {
+        ScrollView {
             if let errorMessage {
-                Section {
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.yellow)
-                        Text(errorMessage)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        Spacer(minLength: 4)
-                        Button("Retry") { Task { await connectAndLoad() } }
-                            .font(.footnote.weight(.semibold))
-                    }
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Color.hermesGold)
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundStyle(Color.hermesSecondaryText)
+                    Spacer(minLength: 4)
+                    Button("Retry") { Task { await connectAndLoad() } }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.hermesGold)
                 }
+                .padding(14)
+                .background(Color.hermesSurface)
             }
 
-            Section("Agents") {
-                ForEach(profiles) { profile in
-                    Button {
-                        onOpenProfile(profile, false)
-                    } label: {
-                        HermesGatewayProfileRow(profile: profile)
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if !pinnedProfiles.isEmpty {
+                    HermesRosterSectionTitle(title: "PINNED")
+                    ForEach(pinnedProfiles) { profile in
+                        profileButton(profile)
                     }
-                    .buttonStyle(.plain)
                 }
-            }
 
-            Section {
-                LabeledContent("Gateway", value: serverURL.host ?? serverURL.absoluteString)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                if !recentProfiles.isEmpty {
+                    HermesRosterSectionTitle(title: "RECENT")
+                    ForEach(recentProfiles) { profile in
+                        profileButton(profile)
+                    }
+                }
+
+                Text(serverURL.host ?? serverURL.absoluteString)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Color.hermesSecondaryText.opacity(0.72))
+                    .padding(.horizontal, 18)
+                    .padding(.top, 20)
+                    .padding(.bottom, 100)
             }
         }
-        .listStyle(.plain)
         .refreshable { await connectAndLoad() }
+    }
+
+    private var pinnedProfiles: [HermesDesktopGatewayProfile] {
+        profiles.filter { $0.isDefault || $0.workerSession != nil }
+    }
+
+    private var recentProfiles: [HermesDesktopGatewayProfile] {
+        profiles.filter { profile in !pinnedProfiles.contains(where: { $0.id == profile.id }) }
+    }
+
+    private var connectionTitle: String {
+        switch client.state {
+        case .connected: "connected"
+        case .connecting: "connecting"
+        case .degraded: "degraded"
+        case .disconnected: "offline"
+        }
+    }
+
+    private var connectionColor: Color {
+        switch client.state {
+        case .connected: Color.hermesGold
+        case .connecting, .degraded: .orange
+        case .disconnected: Color.hermesSecondaryText
+        }
+    }
+
+    private func profileButton(_ profile: HermesDesktopGatewayProfile) -> some View {
+        Button {
+            onOpenProfile(profile, false)
+        } label: {
+            HermesGatewayProfileRow(profile: profile)
+        }
+        .buttonStyle(.plain)
     }
 
     private func installEventObserverIfNeeded() {
@@ -345,6 +535,98 @@ private struct HermesDesktopGatewayRosterView: View {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+}
+
+private struct HermesRosterSectionTitle: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .tracking(1.1)
+                .foregroundStyle(Color.hermesSecondaryText)
+            Rectangle()
+                .fill(Color.hermesDivider)
+                .frame(height: 1)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 22)
+        .padding(.bottom, 8)
+    }
+}
+
+private struct HermesGatewayUpdatesSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let profiles: [HermesDesktopGatewayProfile]
+
+    private var activeProfiles: [HermesDesktopGatewayProfile] {
+        profiles.filter { $0.workerSession != nil }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.hermesSurface.ignoresSafeArea()
+
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        if activeProfiles.isEmpty {
+                            VStack(spacing: 10) {
+                                Image(systemName: "checkmark.circle")
+                                    .font(.system(size: 30, weight: .light))
+                                    .foregroundStyle(Color.hermesGold)
+                                Text("Nothing needs you")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                Text("Running agents and approval requests appear here without taking over your screen.")
+                                    .font(.footnote)
+                                    .foregroundStyle(Color.hermesSecondaryText)
+                                    .multilineTextAlignment(.center)
+                            }
+                            .padding(32)
+                        } else {
+                            ForEach(activeProfiles) { profile in
+                                HStack(spacing: 12) {
+                                    Circle()
+                                        .fill(Color.hermesGold)
+                                        .frame(width: 7, height: 7)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(profile.displayName)
+                                            .font(.body.weight(.semibold))
+                                            .foregroundStyle(.white)
+                                        Text(profile.workerSession?.preview ?? "Working")
+                                            .font(.subheadline)
+                                            .foregroundStyle(Color.hermesSecondaryText)
+                                            .lineLimit(2)
+                                    }
+                                    Spacer()
+                                    Text("WORKING")
+                                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                        .foregroundStyle(Color.hermesGold)
+                                }
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 16)
+                                .overlay(alignment: .bottom) {
+                                    Rectangle().fill(Color.hermesDivider).frame(height: 1)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Updates")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .foregroundStyle(Color.hermesGold)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -432,10 +714,11 @@ private struct HermesGatewayProfileRow: View {
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().fill(Color.accentColor.opacity(0.16))
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(avatarColor.opacity(0.22))
                 Text(initials)
                     .font(.subheadline.weight(.bold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(avatarColor)
             }
             .frame(width: 44, height: 44)
 
@@ -446,41 +729,70 @@ private struct HermesGatewayProfileRow: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
-                    Text(profile.name)
+                    Text(roleLabel)
                         .font(.caption2.monospaced())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.hermesSecondaryText)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(.secondary.opacity(0.12), in: Capsule())
+                        .background(Color.hermesElevatedSurface, in: Capsule())
 
                     Spacer(minLength: 4)
 
                     if isWorking {
-                        Label("Working", systemImage: "circle.fill")
-                            .labelStyle(.titleAndIcon)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.green)
+                        Text("WORKING")
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Color.hermesGold)
                     } else if let time = latestSession?.lastActive ?? latestSession?.startedAt {
                         Text(relativeTime(time))
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Color.hermesSecondaryText)
                     }
                 }
 
-                Text(lastLine)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    if isWorking {
+                        Circle()
+                            .fill(Color.hermesGold)
+                            .frame(width: 5, height: 5)
+                    }
+                    Text(lastLine)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.hermesSecondaryText)
+                        .lineLimit(1)
+                }
             }
 
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Color.hermesSecondaryText.opacity(0.55))
         }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
         .contentShape(Rectangle())
-        .frame(minHeight: 58)
+        .frame(minHeight: 68)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.hermesDivider)
+                .frame(height: 1)
+                .padding(.leading, 74)
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(profile.displayName), \(lastLine)")
+    }
+
+    private var roleLabel: String {
+        profile.model ?? profile.provider ?? profile.name
+    }
+
+    private var avatarColor: Color {
+        let colors: [Color] = [
+            Color.hermesGold,
+            Color(red: 0.29, green: 0.52, blue: 0.96),
+            Color(red: 0.55, green: 0.32, blue: 0.86),
+            Color(red: 0.17, green: 0.64, blue: 0.44)
+        ]
+        let scalarTotal = profile.name.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return colors[scalarTotal % colors.count]
     }
 
     private var initials: String {
@@ -576,13 +888,17 @@ private struct HermesDesktopGatewayChatView: View {
                 scrollToBottom(proxy)
             }
         }
-        .background(Color(.systemBackground))
+        .background(Color.black)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+        .toolbarBackground(Color.black, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 1) {
                     Text(model.title)
                         .font(.headline)
+                        .foregroundStyle(.white)
                         .lineLimit(1)
                     HStack(spacing: 5) {
                         Text(model.modelName ?? model.profileName)
@@ -590,7 +906,7 @@ private struct HermesDesktopGatewayChatView: View {
                         HermesGatewayConnectionLabel(state: client.state, compact: true)
                     }
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.hermesSecondaryText)
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -666,7 +982,7 @@ private struct HermesDesktopGatewayChatView: View {
                             .controlSize(.small)
                         Text(model.activeTool?.summary ?? (model.pendingOutgoingText == nil ? "Hermes is working" : "Waiting for gateway"))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.hermesSecondaryText)
                             .lineLimit(1)
                         Spacer()
                         if model.isRunning {
@@ -688,7 +1004,10 @@ private struct HermesDesktopGatewayChatView: View {
             .padding(.horizontal, 12)
             .padding(.top, 8)
             .padding(.bottom, 8)
-            .background(.bar)
+            .background(Color.black)
+            .overlay(alignment: .top) {
+                Rectangle().fill(Color.hermesDivider).frame(height: 1)
+            }
         }
         .task { await model.start() }
         .onDisappear { model.stopObserving() }
@@ -713,7 +1032,8 @@ private struct HermesGatewayMessageRow: View {
                 .textSelection(.enabled)
                 .padding(.horizontal, message.role == "user" ? 14 : 0)
                 .padding(.vertical, message.role == "user" ? 10 : 0)
-                .background(message.role == "user" ? Color(.secondarySystemBackground) : .clear)
+                .foregroundStyle(.white)
+                .background(message.role == "user" ? Color.hermesElevatedSurface : .clear)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
             if message.role != "user" { Spacer(minLength: 0) }
@@ -734,20 +1054,25 @@ private struct HermesGatewayToolRow: View {
     var body: some View {
         HStack(spacing: 9) {
             Image(systemName: tool.isRunning ? "gearshape.2" : "checkmark.circle")
-                .foregroundStyle(tool.isRunning ? Color.accentColor : .green)
+                .foregroundStyle(tool.isRunning ? Color.hermesGold : .green)
             VStack(alignment: .leading, spacing: 2) {
                 Text(tool.name)
                     .font(.caption.monospaced().weight(.semibold))
+                    .foregroundStyle(.white)
                 Text(tool.summary)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.hermesSecondaryText)
                     .lineLimit(2)
             }
             Spacer()
             if tool.isRunning { ProgressView().controlSize(.small) }
         }
         .padding(10)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(Color.hermesSurface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(tool.isRunning ? Color.hermesGold.opacity(0.5) : Color.hermesDivider, lineWidth: 1)
+        }
     }
 }
 
@@ -760,7 +1085,7 @@ private struct HermesGatewayApprovalCard: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Needs approval", systemImage: "exclamationmark.shield.fill")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.yellow)
+                .foregroundStyle(Color.hermesGold)
 
             if !approval.command.isEmpty {
                 Text(approval.command)
@@ -773,7 +1098,7 @@ private struct HermesGatewayApprovalCard: View {
 
             Text(approval.description)
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.hermesSecondaryText)
 
             HStack(spacing: 10) {
                 Button("Deny", role: .destructive) { onRespond("deny") }
@@ -781,6 +1106,8 @@ private struct HermesGatewayApprovalCard: View {
                     .frame(maxWidth: .infinity)
                 Button("Allow once") { onRespond("once") }
                     .buttonStyle(.borderedProminent)
+                    .tint(Color.hermesGold)
+                    .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
             }
             .controlSize(.large)
@@ -794,10 +1121,10 @@ private struct HermesGatewayApprovalCard: View {
             }
         }
         .padding(14)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color.hermesSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(.yellow.opacity(0.45), lineWidth: 1)
+                .stroke(Color.hermesGold.opacity(0.55), lineWidth: 1)
         }
     }
 }
@@ -810,29 +1137,35 @@ private struct HermesGatewayApprovalSheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if let approval {
-                    ScrollView {
-                        HermesGatewayApprovalCard(
-                            approval: approval,
-                            isResponding: isResponding,
-                            onRespond: onRespond
+            ZStack {
+                Color.hermesSurface.ignoresSafeArea()
+                Group {
+                    if let approval {
+                        ScrollView {
+                            HermesGatewayApprovalCard(
+                                approval: approval,
+                                isResponding: isResponding,
+                                onRespond: onRespond
+                            )
+                            .padding(16)
+                        }
+                    } else {
+                        ContentUnavailableView(
+                            "No pending approval",
+                            systemImage: "checkmark.shield",
+                            description: Text("This run has no tool request waiting for you.")
                         )
-                        .padding(16)
                     }
-                } else {
-                    ContentUnavailableView(
-                        "No pending approval",
-                        systemImage: "checkmark.shield",
-                        description: Text("This run has no tool request waiting for you.")
-                    )
                 }
             }
             .navigationTitle("Approval")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.hermesSurface, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
+                        .foregroundStyle(Color.hermesGold)
                 }
             }
         }
@@ -846,18 +1179,25 @@ private struct HermesGatewayPreviewSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView([.horizontal, .vertical]) {
-                Text(text)
-                    .font(.caption.monospaced())
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
+            ZStack {
+                Color.black.ignoresSafeArea()
+                ScrollView([.horizontal, .vertical]) {
+                    Text(text)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.white.opacity(0.9))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                }
             }
             .navigationTitle("Preview")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
+                        .foregroundStyle(Color.hermesGold)
                 }
             }
         }
@@ -874,22 +1214,40 @@ private struct HermesGatewaySkillsSheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading {
-                    ProgressView("Loading skills…")
-                } else if let errorMessage {
-                    ContentUnavailableView {
-                        Label("Skills unavailable", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(errorMessage)
-                    } actions: {
-                        Button("Retry") { Task { await load() } }
-                    }
-                } else {
-                    List(groups) { group in
-                        Section(group.category.capitalized) {
-                            ForEach(group.skills, id: \.self) { skill in
-                                Label(skill, systemImage: "sparkle")
+            ZStack {
+                Color.hermesSurface.ignoresSafeArea()
+                Group {
+                    if isLoading {
+                        ProgressView("Loading skills…").tint(Color.hermesGold)
+                    } else if let errorMessage {
+                        ContentUnavailableView {
+                            Label("Skills unavailable", systemImage: "exclamationmark.triangle")
+                        } description: {
+                            Text(errorMessage)
+                        } actions: {
+                            Button("Retry") { Task { await load() } }
+                        }
+                    } else {
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                ForEach(groups) { group in
+                                    HermesRosterSectionTitle(title: group.category.uppercased())
+                                    ForEach(group.skills, id: \.self) { skill in
+                                        HStack {
+                                            Text("/\(skill)")
+                                                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                                                .foregroundStyle(.white)
+                                            Spacer()
+                                            Image(systemName: "plus")
+                                                .foregroundStyle(Color.hermesSecondaryText)
+                                        }
+                                        .padding(.horizontal, 18)
+                                        .frame(minHeight: 64)
+                                        .overlay(alignment: .bottom) {
+                                            Rectangle().fill(Color.hermesDivider).frame(height: 1)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -897,9 +1255,12 @@ private struct HermesGatewaySkillsSheet: View {
             }
             .navigationTitle("Skills · \(profileName)")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.hermesSurface, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
+                        .foregroundStyle(Color.hermesGold)
                 }
             }
         }
@@ -927,42 +1288,73 @@ private struct HermesGatewayMemorySheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading {
-                    ProgressView("Loading memory summary…")
-                } else if let errorMessage {
-                    ContentUnavailableView {
-                        Label("Memory unavailable", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(errorMessage)
-                    } actions: {
-                        Button("Retry") { Task { await load() } }
-                    }
-                } else if let summary {
-                    List {
-                        Section("Learning map") {
-                            LabeledContent("Items", value: "\(summary.count)")
-                            ForEach(summary.legend, id: \.self) { line in
-                                Text(line)
-                            }
+            ZStack {
+                Color.hermesSurface.ignoresSafeArea()
+                Group {
+                    if isLoading {
+                        ProgressView("Loading memory…").tint(Color.hermesGold)
+                    } else if let errorMessage {
+                        ContentUnavailableView {
+                            Label("Memory unavailable", systemImage: "exclamationmark.triangle")
+                        } description: {
+                            Text(errorMessage)
+                        } actions: {
+                            Button("Retry") { Task { await load() } }
                         }
-                        if !summary.summary.isEmpty {
-                            Section("Summary") {
+                    } else if let summary {
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                HStack {
+                                    Text("Shared with desktop")
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundStyle(Color.hermesSecondaryText)
+                                    Spacer()
+                                    Text("\(summary.count) items")
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundStyle(Color.hermesGold)
+                                }
+                                .padding(18)
+
                                 ForEach(summary.summary, id: \.self) { line in
                                     Text(line)
+                                        .font(.body)
+                                        .foregroundStyle(.white)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, 18)
+                                        .padding(.vertical, 16)
+                                        .overlay(alignment: .bottom) {
+                                            Rectangle().fill(Color.hermesDivider).frame(height: 1)
+                                        }
+                                }
+
+                                if summary.summary.isEmpty {
+                                    ForEach(summary.legend, id: \.self) { line in
+                                        Text(line)
+                                            .font(.body)
+                                            .foregroundStyle(.white)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(.horizontal, 18)
+                                            .padding(.vertical, 16)
+                                            .overlay(alignment: .bottom) {
+                                                Rectangle().fill(Color.hermesDivider).frame(height: 1)
+                                            }
+                                    }
                                 }
                             }
                         }
+                    } else {
+                        ContentUnavailableView("No memory yet", systemImage: "brain.head.profile")
                     }
-                } else {
-                    ContentUnavailableView("No memory yet", systemImage: "brain.head.profile")
                 }
             }
             .navigationTitle("Memory")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.hermesSurface, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
+                        .foregroundStyle(Color.hermesGold)
                 }
             }
         }
@@ -990,13 +1382,16 @@ private struct HermesGatewayQueuedMessageRow: View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Waiting to send", systemImage: "clock.arrow.circlepath")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.yellow)
+                .foregroundStyle(Color.hermesGold)
             Text(text)
                 .font(.footnote)
+                .foregroundStyle(.white)
                 .lineLimit(2)
             HStack {
                 Button("Retry", action: onRetry)
                     .buttonStyle(.borderedProminent)
+                    .tint(Color.hermesGold)
+                    .foregroundStyle(.black)
                 Button("Remove", role: .destructive, action: onRemove)
                     .buttonStyle(.bordered)
             }
@@ -1004,7 +1399,7 @@ private struct HermesGatewayQueuedMessageRow: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        .background(Color.hermesSurface, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -1026,7 +1421,7 @@ private struct HermesGatewayComposer: View {
                     Image(systemName: voiceInput.errorMessage == nil ? "waveform" : "exclamationmark.triangle")
                 }
                 .font(.caption)
-                .foregroundStyle(voiceInput.errorMessage == nil ? Color.accentColor : .red)
+                .foregroundStyle(voiceInput.errorMessage == nil ? Color.hermesGold : Color.hermesDanger)
                 .padding(.horizontal, 12)
             }
 
@@ -1035,7 +1430,12 @@ private struct HermesGatewayComposer: View {
                     .lineLimit(1...6)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 11)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20))
+                    .foregroundStyle(.white)
+                    .background(Color.hermesSurface, in: RoundedRectangle(cornerRadius: 20))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Color.hermesDivider, lineWidth: 1)
+                    }
                     .submitLabel(.send)
                     .disabled(!isInputEnabled)
                     .onSubmit {
@@ -1053,8 +1453,8 @@ private struct HermesGatewayComposer: View {
                         .font(.body.weight(.semibold))
                         .frame(width: 44, height: 44)
                 }
-                .buttonStyle(.bordered)
-                .clipShape(Circle())
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.hermesSecondaryText)
                 .disabled(!isInputEnabled || voiceInput.isRequestingPermission)
                 .accessibilityLabel(voiceInput.isListening ? "Stop dictation" : "Start dictation")
 
@@ -1063,8 +1463,9 @@ private struct HermesGatewayComposer: View {
                         .font(.headline.weight(.bold))
                         .frame(width: 44, height: 44)
                 }
-                .buttonStyle(.borderedProminent)
-                .clipShape(Circle())
+                .buttonStyle(.plain)
+                .foregroundStyle(.black)
+                .background(isEnabled ? Color.hermesGold : Color.hermesElevatedSurface, in: Circle())
                 .disabled(!isEnabled)
                 .accessibilityLabel("Send")
             }

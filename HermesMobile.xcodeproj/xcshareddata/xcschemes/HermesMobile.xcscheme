@@ -31,6 +31,18 @@
       language = "en"
       region = "en_US"
       shouldAutocreateTestPlan = "YES">
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "HERMES_DESKTOP_INTEGRATION_URL"
+            value = "$(HERMES_DESKTOP_INTEGRATION_URL)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "HERMES_DESKTOP_INTEGRATION_TOKEN"
+            value = "$(HERMES_DESKTOP_INTEGRATION_TOKEN)"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
       <Testables>
          <TestableReference
             skipped = "NO"

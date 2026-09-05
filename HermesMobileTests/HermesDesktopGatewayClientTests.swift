@@ -201,6 +201,73 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
         XCTAssertEqual(try socket.sentJSON(at: 6)["method"] as? String, "skills.manage")
         XCTAssertEqual(try socket.sentJSON(at: 7)["method"] as? String, "learning.frames")
     }
+
+    @MainActor
+    func testLiveTLSGatewayDiscoversAllProfilesAndCompletesPrompt() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let serverURL = environment["HERMES_DESKTOP_INTEGRATION_URL"],
+              !serverURL.isEmpty,
+              !serverURL.hasPrefix("$("),
+              let token = environment["HERMES_DESKTOP_INTEGRATION_TOKEN"],
+              !token.isEmpty,
+              !token.hasPrefix("$(")
+        else {
+            throw XCTSkip("The live Hermes Desktop gateway fixture is enabled in PR CI.")
+        }
+
+        var pairingCode = URLComponents()
+        pairingCode.scheme = "hermes-agent"
+        pairingCode.host = "desktop-pair"
+        pairingCode.queryItems = [
+            URLQueryItem(name: "server", value: serverURL),
+            URLQueryItem(name: "token", value: token),
+        ]
+        let configuration = try HermesDesktopGatewayClient.pairingConfiguration(
+            from: try XCTUnwrap(pairingCode.string)
+        )
+        let client = HermesDesktopGatewayClient(configuration: configuration)
+        let completed = expectation(description: "Hermes Desktop emitted message.complete")
+        var completedEvent: HermesDesktopGatewayEvent?
+        let observerID = client.observeEvents { event in
+            guard event.type == "message.complete" else { return }
+            completedEvent = event
+            completed.fulfill()
+        }
+        defer {
+            client.removeEventObserver(observerID)
+            client.disconnect()
+        }
+
+        try await client.connect(timeout: .seconds(8))
+        XCTAssertEqual(client.state, .connected)
+
+        let profiles = try await client.listProfiles(includeSessions: true)
+        XCTAssertEqual(profiles.map(\.name), ["default", "research", "qa"])
+        XCTAssertTrue(profiles[0].isDefault)
+        XCTAssertEqual(profiles[0].lastSession?.resolvedID, "release-session-tip")
+
+        let session = try await client.createSession(profile: "research", title: "Mobile gateway proof")
+        XCTAssertEqual(session.runtimeSessionID, "runtime-mobile-ci")
+        XCTAssertEqual(session.storedSessionID, "stored-mobile-ci")
+        XCTAssertEqual(session.model, "gpt-5.6-terra")
+
+        try await client.submitPrompt(
+            sessionID: session.runtimeSessionID,
+            text: "Reply with the Hermes mobile gateway receipt"
+        )
+        await fulfillment(of: [completed], timeout: 5)
+
+        XCTAssertEqual(completedEvent?.sessionID, session.runtimeSessionID)
+        XCTAssertEqual(completedEvent?.profile, "research")
+        XCTAssertEqual(
+            completedEvent?.payload["content"],
+            .string("Hermes mobile gateway verified.")
+        )
+        XCTAssertEqual(
+            completedEvent?.payload["echo"],
+            .string("Reply with the Hermes mobile gateway receipt")
+        )
+    }
 }
 
 private final class MockHermesDesktopWebSocketTask: HermesDesktopWebSocketTask, @unchecked Sendable {

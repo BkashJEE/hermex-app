@@ -105,13 +105,119 @@ jobs:
       - name: Build and test
         env:
           SIMULATOR_NAME: ${{ steps.sim.outputs.name }}
+          SIMULATOR_UDID: ${{ steps.sim.outputs.udid }}
+          MOCK_GATEWAY_PORT: "18791"
+          MOCK_GATEWAY_TOKEN: hermes-mobile-ci-token
         run: |
           set -euo pipefail
+          evidence_dir="artifacts/hermes-gateway-integration"
+          fixture_dir=$(mktemp -d "${RUNNER_TEMP}/hermes-gateway.XXXXXX")
+          mkdir -p "${evidence_dir}"
+
+          printf '%s\n' \
+            '[req]' \
+            'distinguished_name=dn' \
+            'x509_extensions=v3_ca' \
+            'prompt=no' \
+            '[dn]' \
+            'CN=Hermes Mobile CI Root' \
+            '[v3_ca]' \
+            'basicConstraints=critical,CA:true' \
+            'keyUsage=critical,keyCertSign,cRLSign' \
+            'subjectKeyIdentifier=hash' \
+            > "${fixture_dir}/ca.cnf"
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout "${fixture_dir}/ca.key" \
+            -out "${fixture_dir}/ca.crt" \
+            -days 1 \
+            -config "${fixture_dir}/ca.cnf" >/dev/null 2>&1
+          openssl req -newkey rsa:2048 -nodes \
+            -keyout "${fixture_dir}/server.key" \
+            -out "${fixture_dir}/server.csr" \
+            -subj "/CN=localhost" >/dev/null 2>&1
+          printf '%s\n' \
+            'subjectAltName=DNS:localhost,IP:127.0.0.1' \
+            'extendedKeyUsage=serverAuth' \
+            'basicConstraints=critical,CA:false' \
+            'keyUsage=critical,digitalSignature,keyEncipherment' \
+            > "${fixture_dir}/server.ext"
+          openssl x509 -req \
+            -in "${fixture_dir}/server.csr" \
+            -CA "${fixture_dir}/ca.crt" \
+            -CAkey "${fixture_dir}/ca.key" \
+            -CAcreateserial \
+            -out "${fixture_dir}/server.crt" \
+            -days 1 \
+            -extfile "${fixture_dir}/server.ext" >/dev/null 2>&1
+
+          xcrun simctl boot "${SIMULATOR_UDID}" 2>/dev/null || true
+          xcrun simctl bootstatus "${SIMULATOR_UDID}" -b
+          xcrun simctl keychain "${SIMULATOR_UDID}" add-root-cert "${fixture_dir}/ca.crt"
+
+          python3 ci/hermes_desktop_gateway_mock.py \
+            --port "${MOCK_GATEWAY_PORT}" \
+            --token "${MOCK_GATEWAY_TOKEN}" \
+            --certificate "${fixture_dir}/server.crt" \
+            --key "${fixture_dir}/server.key" \
+            --receipt "${evidence_dir}/receipt.json" \
+            > "${evidence_dir}/server.log" 2>&1 &
+          gateway_pid=$!
+          trap 'kill "${gateway_pid}" 2>/dev/null || true' EXIT
+
+          gateway_ready=false
+          for _ in {1..40}; do
+            if [[ "$(curl --insecure --silent --output /dev/null --write-out '%{http_code}' "https://localhost:${MOCK_GATEWAY_PORT}/" || true)" == "401" ]]; then
+              gateway_ready=true
+              break
+            fi
+            sleep 0.25
+          done
+          if [[ "${gateway_ready}" != "true" ]]; then
+            echo "Hermes Desktop gateway fixture did not become ready." >&2
+            cat "${evidence_dir}/server.log" >&2
+            exit 1
+          fi
+
+          integration_url="https://localhost:${MOCK_GATEWAY_PORT}"
           xcodebuild test \
             -project "${PROJECT_PATH}" \
             -scheme "${SCHEME}" \
             -destination "platform=iOS Simulator,name=${SIMULATOR_NAME}" \
             -resultBundlePath TestResults.xcresult \
+            -parallel-testing-enabled NO \
+            HERMES_DESKTOP_INTEGRATION_URL="${integration_url}" \
+            HERMES_DESKTOP_INTEGRATION_TOKEN="${MOCK_GATEWAY_TOKEN}" \
+            CODE_SIGNING_ALLOWED=NO
+
+          python3 - "${evidence_dir}/receipt.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          receipt_path = pathlib.Path(sys.argv[1])
+          if not receipt_path.is_file():
+              raise SystemExit("Hermes gateway integration receipt was not written")
+          receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+          expected_methods = ["profiles.list", "session.create", "prompt.submit"]
+          if receipt.get("methods") != expected_methods:
+              raise SystemExit(f"unexpected gateway methods: {receipt.get('methods')!r}")
+          if receipt.get("profiles_requested_with_sessions") is not True:
+              raise SystemExit("profiles.list did not request session data")
+          if receipt.get("created_profile") != "research":
+              raise SystemExit(f"session was not scoped to research: {receipt.get('created_profile')!r}")
+          if receipt.get("prompt_text") != "Reply with the Hermes mobile gateway receipt":
+              raise SystemExit("prompt receipt did not match the iOS request")
+          print(json.dumps(receipt, indent=2))
+          PY
+
+      - name: Compile for a physical iPhone
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project "${PROJECT_PATH}" \
+            -scheme "${SCHEME}" \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath DeviceBuild \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Upload test results on failure
@@ -121,6 +227,14 @@ jobs:
           name: test-results
           path: TestResults.xcresult
           if-no-files-found: ignore
+
+      - name: Upload Hermes gateway integration evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: hermes-mobile-gateway-integration
+          path: artifacts/hermes-gateway-integration
+          if-no-files-found: error
 
       - name: Launch Hermes and capture pairing screen
         env:

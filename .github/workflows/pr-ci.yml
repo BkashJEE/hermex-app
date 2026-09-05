@@ -77,26 +77,30 @@ jobs:
         id: sim
         run: |
           set -euo pipefail
-          name=$(xcrun simctl list devices available --json | python3 -c '
+          selection=$(xcrun simctl list devices available --json | python3 -c '
           import json, sys
           data = json.load(sys.stdin)
           phones = [
-              device["name"]
+              (device["name"], device["udid"])
               for runtime, devices in data["devices"].items()
               if "iOS" in runtime
               for device in devices
               if device.get("isAvailable") and device["name"].startswith("iPhone")
           ]
           preferred = "iPhone 17"
-          print(preferred if preferred in phones else phones[0] if phones else "")
+          selected = next((phone for phone in phones if phone[0] == preferred), phones[0] if phones else None)
+          print("|".join(selected) if selected else "")
           ')
-          if [[ -z "${name}" ]]; then
+          if [[ -z "${selection}" ]]; then
             echo "No available iPhone simulator found:" >&2
             xcrun simctl list devices available >&2
             exit 1
           fi
+          name="${selection%%|*}"
+          udid="${selection#*|}"
           echo "Using simulator: ${name}"
           echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "udid=${udid}" >> "$GITHUB_OUTPUT"
 
       - name: Build and test
         env:
@@ -117,6 +121,36 @@ jobs:
           name: test-results
           path: TestResults.xcresult
           if-no-files-found: ignore
+
+      - name: Launch Hermes and capture pairing screen
+        env:
+          SIMULATOR_UDID: ${{ steps.sim.outputs.udid }}
+        run: |
+          set -euo pipefail
+          app_path=$(find "$HOME/Library/Developer/Xcode/DerivedData" \
+            -path '*/Build/Products/Debug-iphonesimulator/HermesMobile.app' \
+            -type d -print -quit)
+          if [[ -z "${app_path}" ]]; then
+            echo "HermesMobile.app was not produced by the test build." >&2
+            exit 1
+          fi
+
+          codesign --force --deep --sign - --timestamp=none "${app_path}"
+          xcrun simctl boot "${SIMULATOR_UDID}" 2>/dev/null || true
+          xcrun simctl bootstatus "${SIMULATOR_UDID}" -b
+          xcrun simctl uninstall "${SIMULATOR_UDID}" com.bkashjee.hermesmobile 2>/dev/null || true
+          xcrun simctl install "${SIMULATOR_UDID}" "${app_path}"
+          xcrun simctl launch "${SIMULATOR_UDID}" com.bkashjee.hermesmobile
+          sleep 3
+          mkdir -p artifacts
+          xcrun simctl io "${SIMULATOR_UDID}" screenshot artifacts/hermes-pairing.png
+
+      - name: Upload Hermes pairing preview
+        uses: actions/upload-artifact@v7
+        with:
+          name: hermes-mobile-pairing-preview
+          path: artifacts/hermes-pairing.png
+          if-no-files-found: error
 
   gate:
     name: CI Gate

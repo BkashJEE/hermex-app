@@ -179,14 +179,16 @@ jobs:
           fi
 
           integration_url="https://localhost:${MOCK_GATEWAY_PORT}"
+          if [[ "${integration_url}" != "https://localhost:18791" || "${MOCK_GATEWAY_TOKEN}" != "hermes-mobile-ci-token" ]]; then
+            echo "The XCTest fixture constants and CI gateway configuration have drifted." >&2
+            exit 1
+          fi
           xcodebuild test \
             -project "${PROJECT_PATH}" \
             -scheme "${SCHEME}" \
             -destination "platform=iOS Simulator,name=${SIMULATOR_NAME}" \
             -resultBundlePath TestResults.xcresult \
             -parallel-testing-enabled NO \
-            INFOPLIST_KEY_HermesDesktopIntegrationURL="${integration_url}" \
-            INFOPLIST_KEY_HermesDesktopIntegrationToken="${MOCK_GATEWAY_TOKEN}" \
             CODE_SIGNING_ALLOWED=NO
 
           python3 - "${evidence_dir}/receipt.json" <<'PY'

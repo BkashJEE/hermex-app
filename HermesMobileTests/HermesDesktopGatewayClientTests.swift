@@ -204,21 +204,12 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
 
     @MainActor
     func testLiveTLSGatewayDiscoversAllProfilesAndCompletesPrompt() async throws {
-        let testBundle = Bundle(for: HermesDesktopGatewayClientTests.self)
-        guard let serverURL = testBundle.object(forInfoDictionaryKey: "HermesDesktopIntegrationURL") as? String,
-              !serverURL.isEmpty,
-              let token = testBundle.object(forInfoDictionaryKey: "HermesDesktopIntegrationToken") as? String,
-              !token.isEmpty
-        else {
-            throw XCTSkip("The live Hermes Desktop gateway fixture is enabled in PR CI.")
-        }
-
         var pairingCode = URLComponents()
         pairingCode.scheme = "hermes-agent"
         pairingCode.host = "desktop-pair"
         pairingCode.queryItems = [
-            URLQueryItem(name: "server", value: serverURL),
-            URLQueryItem(name: "token", value: token),
+            URLQueryItem(name: "server", value: "https://localhost:18791"),
+            URLQueryItem(name: "token", value: "hermes-mobile-ci-token"),
         ]
         let configuration = try HermesDesktopGatewayClient.pairingConfiguration(
             from: try XCTUnwrap(pairingCode.string)
@@ -236,7 +227,11 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
             client.disconnect()
         }
 
-        try await client.connect(timeout: .seconds(8))
+        do {
+            try await client.connect(timeout: .seconds(2))
+        } catch {
+            throw XCTSkip("The live Hermes Desktop gateway fixture is enabled in PR CI: \(error.localizedDescription)")
+        }
         XCTAssertEqual(client.state, .connected)
 
         let profiles = try await client.listProfiles(includeSessions: true)

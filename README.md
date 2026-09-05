@@ -87,7 +87,13 @@ xcodebuild test \
   -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
-The checked-in signing defaults are for CI/source validation. Configure your own Apple Developer team in `Config/Local.xcconfig` for a physical device or TestFlight build; that file is gitignored.
+The checked-in signing defaults are for CI/source validation. Configure your own Apple Developer team in a gitignored `Config/Local.xcconfig` before running on a physical device:
+
+```xcconfig
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+```
+
+For TestFlight, also configure the repository variables and secrets in [TESTFLIGHT.md](TESTFLIGHT.md). Never commit or paste the App Store Connect private key into an issue, pull request, or chat.
 
 ## Security
 

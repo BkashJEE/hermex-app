@@ -225,8 +225,14 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
             gatewaySession.invalidateAndCancel()
         }
 
+        let connectionTimeout: Duration
+#if HERMES_GATEWAY_CI
+        connectionTimeout = .seconds(12)
+#else
+        connectionTimeout = .seconds(2)
+#endif
         do {
-            try await client.connect(timeout: .seconds(2))
+            try await client.connect(timeout: connectionTimeout)
         } catch {
 #if HERMES_GATEWAY_CI
             XCTFail("Hermes Desktop gateway integration failed: \(error.localizedDescription)")

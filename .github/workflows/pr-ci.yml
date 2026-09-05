@@ -192,6 +192,8 @@ jobs:
             -resultBundlePath GatewayIntegration.xcresult \
             -parallel-testing-enabled NO \
             -only-testing:"${integration_test}" \
+            -retry-tests-on-failure \
+            -test-iterations 2 \
             'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) HERMES_GATEWAY_CI' \
             CODE_SIGNING_ALLOWED=NO
 

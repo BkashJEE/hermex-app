@@ -134,7 +134,7 @@ enum ProfileEntityProvider {
     static func refreshAppShortcuts(changed: Bool) {
         guard changed || !didRefreshAppShortcutsThisLaunch else { return }
         didRefreshAppShortcutsThisLaunch = true
-        HermexShortcuts.updateAppShortcutParameters()
+        HermesShortcuts.updateAppShortcutParameters()
     }
 }
 

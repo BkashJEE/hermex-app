@@ -22,9 +22,9 @@ final class AppThemeTests: XCTestCase {
     }
 
     func testHeaderLogoColorDisplayNameUsesPresetOrCustomFallback() {
-        XCTAssertEqual(HeaderLogoColor.displayName(for: "#FFD700"), "Yellow")
+        XCTAssertEqual(HeaderLogoColor.displayName(for: "#E8B83E"), "Hermes Gold")
         XCTAssertEqual(HeaderLogoColor.displayName(for: "#123456"), "Custom")
-        XCTAssertEqual(HeaderLogoColor.displayName(for: "not-a-color"), "Yellow")
+        XCTAssertEqual(HeaderLogoColor.displayName(for: "not-a-color"), "Hermes Gold")
     }
 
     func testHeaderLogoColorFormatsRGBComponentsAsHex() {
@@ -78,7 +78,7 @@ final class AppThemeTests: XCTestCase {
                 storedInitials: "",
                 fallbackFullName: ""
             ),
-            "UZ"
+            "HE"
         )
     }
 

@@ -419,7 +419,7 @@ enum SessionIdentitySettings {
         }
 
         let fallbackInitials = initials(from: fallbackFullName)
-        return fallbackInitials.isEmpty ? "UZ" : fallbackInitials
+        return fallbackInitials.isEmpty ? "HE" : fallbackInitials
     }
 
     private static func initials(from rawName: String) -> String {

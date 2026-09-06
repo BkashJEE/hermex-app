@@ -54,10 +54,10 @@ struct HeaderLogoColorPreset: Identifiable, Equatable {
 
 enum HeaderLogoColor {
     static let storageKey = "headerLogoColorHex"
-    static let defaultHex = "#FFD700"
+    static let defaultHex = "#E8B83E"
 
     static let presets: [HeaderLogoColorPreset] = [
-        HeaderLogoColorPreset(name: String(localized: "Yellow"), hex: "#FFD700"),
+        HeaderLogoColorPreset(name: String(localized: "Hermes Gold"), hex: "#E8B83E"),
         HeaderLogoColorPreset(name: String(localized: "Blue"), hex: "#5B7CFF"),
         HeaderLogoColorPreset(name: String(localized: "Purple"), hex: "#AF52DE"),
         HeaderLogoColorPreset(name: String(localized: "Red"), hex: "#FF3B30"),
@@ -79,7 +79,7 @@ enum HeaderLogoColor {
     }
 
     static func color(for rawValue: String) -> Color {
-        Color(hexRGB: normalizedHex(rawValue) ?? defaultHex) ?? Color(red: 1.0, green: 0.843, blue: 0.0)
+        Color(hexRGB: normalizedHex(rawValue) ?? defaultHex) ?? Color(red: 0.91, green: 0.72, blue: 0.24)
     }
 
     static func prefersDarkForeground(for rawValue: String) -> Bool {
@@ -226,7 +226,7 @@ enum ChatTranscriptDisplaySettings {
     /// Whether the user's primary preferred language reads right-to-left
     /// (Arabic/Hebrew/Persian/Urdu/…). Read from the device language *preference*
     /// — not the app's resolved UI direction — so it still fires for an RTL user
-    /// even though Hermex isn't translated into their language yet: the app text
+    /// even though Hermes isn't translated into their language yet: the app text
     /// falls back to English (LTR), but the chat layout should not. Only the
     /// primary preference counts (a German-first user with Arabic further down
     /// the list is "using German"). `preferredLanguages` is injectable for tests.

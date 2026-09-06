@@ -25,6 +25,11 @@ struct KeychainStore: KeychainStoring {
         // URL is treated as a credential (PROJECT_SPEC Phase 1), so the registry
         // lives in the Keychain, not UserDefaults (#15).
         case servers = "servers"
+        // Hermes Desktop's native JSON-RPC gateway configuration. The token
+        // can authorize terminal-capable agent work, so both values stay in
+        // the Keychain and never pass through UserDefaults or analytics.
+        case desktopGatewayURL = "desktop_gateway_url"
+        case desktopGatewayToken = "desktop_gateway_token"
     }
 
     private let keychain: Keychain

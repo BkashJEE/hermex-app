@@ -7,8 +7,8 @@
 
 DEVELOPMENT_TEAM = 6GYD9C9N6R
 APP_IDENTIFIER_SUFFIX =
-APP_BUNDLE_IDENTIFIER = com.uzairansar.hermesmobile$(APP_IDENTIFIER_SUFFIX)
-APP_GROUP_IDENTIFIER = group.com.uzairansar.hermesmobile$(APP_IDENTIFIER_SUFFIX)
+APP_BUNDLE_IDENTIFIER = com.bkashjee.hermesmobile$(APP_IDENTIFIER_SUFFIX)
+APP_GROUP_IDENTIFIER = group.com.bkashjee.hermesmobile$(APP_IDENTIFIER_SUFFIX)
 
 // Optional per-machine overrides. This include must stay last: later
 // assignments win, so Local.xcconfig values override the defaults above.

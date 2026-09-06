@@ -133,8 +133,10 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
             #"{"jsonrpc":"2.0","id":\#(requestID),"result":{"found":true,"data":"data:image/png;base64,\#(expected.base64EncodedString())"}}"#
         )
 
-        XCTAssertEqual(try await avatarTask.value, expected)
-        XCTAssertEqual(try await client.profileAvatarData(profileName: "research"), expected)
+        let loadedAvatar = try await avatarTask.value
+        XCTAssertEqual(loadedAvatar, expected)
+        let cachedAvatar = try await client.profileAvatarData(profileName: "research")
+        XCTAssertEqual(cachedAvatar, expected)
         XCTAssertThrowsError(
             try socket.sentJSON(at: 1),
             "The second read should use the in-memory avatar cache"
@@ -304,7 +306,8 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
         XCTAssertTrue(profiles.allSatisfy(\.hasAvatar))
         XCTAssertEqual(profiles[0].lastSession?.resolvedID, "release-session-tip")
         for profile in profiles {
-            XCTAssertNotNil(try await client.profileAvatarData(profileName: profile.name))
+            let avatar = try await client.profileAvatarData(profileName: profile.name)
+            XCTAssertNotNil(avatar)
         }
 
         let session = try await client.createSession(profile: "research", title: "Mobile gateway proof")

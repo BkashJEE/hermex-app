@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private extension Color {
     static var hermesGold: Color { Color(red: 0.91, green: 0.72, blue: 0.24) }
@@ -209,6 +210,7 @@ private struct HermesPairingCornerFrame: Shape {
 private struct HermesDesktopConversationRoute: Hashable {
     let profileName: String
     let profileDisplayName: String
+    let profileHasAvatar: Bool
     let storedSessionID: String?
     let title: String?
 }
@@ -249,6 +251,7 @@ struct HermesDesktopGatewayRootView: View {
                     client: client,
                     profileName: route.profileName,
                     profileDisplayName: route.profileDisplayName,
+                    profileHasAvatar: route.profileHasAvatar,
                     storedSessionID: route.storedSessionID,
                     initialTitle: route.title
                 )
@@ -266,6 +269,7 @@ struct HermesDesktopGatewayRootView: View {
             HermesDesktopConversationRoute(
                 profileName: profile.name,
                 profileDisplayName: profile.displayName,
+                profileHasAvatar: profile.hasAvatar,
                 storedSessionID: session?.resolvedID ?? session?.id,
                 title: session?.title
             )
@@ -413,7 +417,7 @@ private struct HermesDesktopGatewayRosterView: View {
             HermesGatewayAppearanceSheet()
         }
         .sheet(isPresented: $showsUpdates) {
-            HermesGatewayUpdatesSheet(profiles: profiles)
+            HermesGatewayUpdatesSheet(client: client, profiles: profiles)
         }
         .task {
             installEventObserverIfNeeded()
@@ -500,7 +504,7 @@ private struct HermesDesktopGatewayRosterView: View {
         Button {
             onOpenProfile(profile, false)
         } label: {
-            HermesGatewayProfileRow(profile: profile)
+            HermesGatewayProfileRow(client: client, profile: profile)
         }
         .buttonStyle(.plain)
     }
@@ -559,6 +563,7 @@ private struct HermesRosterSectionTitle: View {
 
 private struct HermesGatewayUpdatesSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Bindable var client: HermesDesktopGatewayClient
     let profiles: [HermesDesktopGatewayProfile]
 
     private var activeProfiles: [HermesDesktopGatewayProfile] {
@@ -589,9 +594,14 @@ private struct HermesGatewayUpdatesSheet: View {
                         } else {
                             ForEach(activeProfiles) { profile in
                                 HStack(spacing: 12) {
-                                    Circle()
-                                        .fill(Color.hermesGold)
-                                        .frame(width: 7, height: 7)
+                                    HermesGatewayAgentAvatar(
+                                        client: client,
+                                        profileName: profile.name,
+                                        displayName: profile.displayName,
+                                        hasAvatar: profile.hasAvatar,
+                                        activity: .working,
+                                        size: 40
+                                    )
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(profile.displayName)
                                             .font(.body.weight(.semibold))
@@ -627,6 +637,127 @@ private struct HermesGatewayUpdatesSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+}
+
+private enum HermesGatewayAgentActivity: Equatable {
+    case idle
+    case working
+    case needsAttention
+    case offline
+
+    var isAnimated: Bool {
+        self == .working || self == .needsAttention
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .idle: "idle"
+        case .working: "working"
+        case .needsAttention: "needs approval"
+        case .offline: "offline"
+        }
+    }
+}
+
+private struct HermesGatewayAgentAvatar: View {
+    @Bindable var client: HermesDesktopGatewayClient
+    let profileName: String
+    let displayName: String
+    let hasAvatar: Bool
+    let activity: HermesGatewayAgentActivity
+    let size: CGFloat
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var avatarImage: UIImage?
+
+    var body: some View {
+        TimelineView(
+            .animation(
+                minimumInterval: 1.0 / 24.0,
+                paused: reduceMotion || !activity.isAnimated
+            )
+        ) { timeline in
+            let phase = timeline.date.timeIntervalSinceReferenceDate
+                .truncatingRemainder(dividingBy: 1.4) / 1.4
+
+            ZStack {
+                avatarContent
+                    .frame(width: size - 4, height: size - 4)
+                    .clipShape(RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
+
+                if activity == .working {
+                    Circle()
+                        .trim(from: 0.06, to: 0.34)
+                        .stroke(Color.hermesGold, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                        .rotationEffect(.degrees(reduceMotion ? 0 : phase * 360))
+                } else if activity == .needsAttention {
+                    RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                        .stroke(Color.hermesGold, lineWidth: 2)
+                        .scaleEffect(reduceMotion ? 1 : 1 + (0.08 * abs(sin(phase * .pi))))
+                        .opacity(reduceMotion ? 1 : 0.42 + (0.58 * abs(cos(phase * .pi))))
+                }
+            }
+            .frame(width: size, height: size)
+        }
+        .opacity(activity == .offline ? 0.52 : 1)
+        .task(id: "\(profileName)|\(hasAvatar)") {
+            guard hasAvatar else {
+                avatarImage = nil
+                return
+            }
+
+            guard let data = try? await client.profileAvatarData(profileName: profileName),
+                  let image = UIImage(data: data)
+            else {
+                avatarImage = nil
+                return
+            }
+
+            avatarImage = image
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(displayName), \(activity.accessibilityLabel)")
+    }
+
+    @ViewBuilder
+    private var avatarContent: some View {
+        if let avatarImage {
+            Image(uiImage: avatarImage)
+                .resizable()
+                .scaledToFill()
+                .transition(.opacity)
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
+                    .fill(avatarColor.opacity(0.22))
+                Text(initials)
+                    .font(.system(size: size * 0.34, weight: .bold, design: .rounded))
+                    .foregroundStyle(avatarColor)
+            }
+        }
+    }
+
+    private var initials: String {
+        let value = displayName
+            .split(separator: " ")
+            .prefix(2)
+            .compactMap(\.first)
+            .map(String.init)
+            .joined()
+            .uppercased()
+        return value.isEmpty ? "H" : value
+    }
+
+    private var avatarColor: Color {
+        let colors: [Color] = [
+            Color.hermesGold,
+            Color(red: 0.29, green: 0.52, blue: 0.96),
+            Color(red: 0.55, green: 0.32, blue: 0.86),
+            Color(red: 0.17, green: 0.64, blue: 0.44),
+        ]
+        let scalarTotal = profileName.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return colors[scalarTotal % colors.count]
     }
 }
 
@@ -702,6 +833,7 @@ private struct HermesGatewayAppearanceSheet: View {
 }
 
 private struct HermesGatewayProfileRow: View {
+    @Bindable var client: HermesDesktopGatewayClient
     let profile: HermesDesktopGatewayProfile
 
     private var latestSession: HermesDesktopGatewaySessionSummary? { profile.lastSession }
@@ -713,14 +845,14 @@ private struct HermesGatewayProfileRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(avatarColor.opacity(0.22))
-                Text(initials)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(avatarColor)
-            }
-            .frame(width: 44, height: 44)
+            HermesGatewayAgentAvatar(
+                client: client,
+                profileName: profile.name,
+                displayName: profile.displayName,
+                hasAvatar: profile.hasAvatar,
+                activity: avatarActivity,
+                size: 44
+            )
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 7) {
@@ -784,25 +916,11 @@ private struct HermesGatewayProfileRow: View {
         profile.model ?? profile.provider ?? profile.name
     }
 
-    private var avatarColor: Color {
-        let colors: [Color] = [
-            Color.hermesGold,
-            Color(red: 0.29, green: 0.52, blue: 0.96),
-            Color(red: 0.55, green: 0.32, blue: 0.86),
-            Color(red: 0.17, green: 0.64, blue: 0.44)
-        ]
-        let scalarTotal = profile.name.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        return colors[scalarTotal % colors.count]
-    }
-
-    private var initials: String {
-        profile.displayName
-            .split(separator: " ")
-            .prefix(2)
-            .compactMap(\.first)
-            .map(String.init)
-            .joined()
-            .uppercased()
+    private var avatarActivity: HermesGatewayAgentActivity {
+        if isWorking {
+            return .working
+        }
+        return client.state == .connected ? .idle : .offline
     }
 
     private var lastLine: String {
@@ -828,6 +946,7 @@ private struct HermesGatewayProfileRow: View {
 
 private struct HermesDesktopGatewayChatView: View {
     @Bindable var client: HermesDesktopGatewayClient
+    let profileHasAvatar: Bool
     @State private var model: HermesDesktopGatewayChatViewModel
     @State private var activeSheet: HermesGatewayRunSheet?
 
@@ -835,10 +954,12 @@ private struct HermesDesktopGatewayChatView: View {
         client: HermesDesktopGatewayClient,
         profileName: String,
         profileDisplayName: String,
+        profileHasAvatar: Bool,
         storedSessionID: String?,
         initialTitle: String?
     ) {
         self.client = client
+        self.profileHasAvatar = profileHasAvatar
         _model = State(
             initialValue: HermesDesktopGatewayChatViewModel(
                 client: client,
@@ -895,18 +1016,28 @@ private struct HermesDesktopGatewayChatView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 1) {
-                    Text(model.title)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    HStack(spacing: 5) {
-                        Text(model.modelName ?? model.profileName)
-                        Text("·")
-                        HermesGatewayConnectionLabel(state: client.state, compact: true)
+                HStack(spacing: 8) {
+                    HermesGatewayAgentAvatar(
+                        client: client,
+                        profileName: model.profileName,
+                        displayName: model.profileDisplayName,
+                        hasAvatar: profileHasAvatar,
+                        activity: avatarActivity,
+                        size: 32
+                    )
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(model.title)
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        HStack(spacing: 5) {
+                            Text(model.modelName ?? model.profileName)
+                            Text("·")
+                            HermesGatewayConnectionLabel(state: client.state, compact: true)
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(Color.hermesSecondaryText)
                     }
-                    .font(.caption2)
-                    .foregroundStyle(Color.hermesSecondaryText)
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -1011,6 +1142,16 @@ private struct HermesDesktopGatewayChatView: View {
         }
         .task { await model.start() }
         .onDisappear { model.stopObserving() }
+    }
+
+    private var avatarActivity: HermesGatewayAgentActivity {
+        if model.pendingApproval != nil {
+            return .needsAttention
+        }
+        if model.isRunning {
+            return .working
+        }
+        return client.state == .connected ? .idle : .offline
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {

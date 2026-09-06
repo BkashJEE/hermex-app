@@ -208,11 +208,20 @@ jobs:
           receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
           if receipt.get("websocket_connections") != 1:
               raise SystemExit(f"expected one authenticated WebSocket connection: {receipt.get('websocket_connections')!r}")
-          expected_methods = ["profiles.list", "session.create", "prompt.submit"]
+          expected_methods = [
+              "profiles.list",
+              "profiles.get_asset",
+              "profiles.get_asset",
+              "profiles.get_asset",
+              "session.create",
+              "prompt.submit",
+          ]
           if receipt.get("methods") != expected_methods:
               raise SystemExit(f"unexpected gateway methods: {receipt.get('methods')!r}")
           if receipt.get("profiles_requested_with_sessions") is not True:
               raise SystemExit("profiles.list did not request session data")
+          if receipt.get("avatar_requests") != 3:
+              raise SystemExit(f"expected three avatar requests: {receipt.get('avatar_requests')!r}")
           if receipt.get("created_profile") != "research":
               raise SystemExit(f"session was not scoped to research: {receipt.get('created_profile')!r}")
           if receipt.get("prompt_text") != "Reply with the Hermes mobile gateway receipt":

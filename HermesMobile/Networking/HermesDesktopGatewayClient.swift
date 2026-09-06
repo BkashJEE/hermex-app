@@ -166,6 +166,7 @@ struct HermesDesktopGatewayProfile: Identifiable, Equatable {
     let provider: String?
     let skillCount: Int
     let isDefault: Bool
+    let hasAvatar: Bool
     let lastSession: HermesDesktopGatewaySessionSummary?
     let workerSession: HermesDesktopGatewaySessionSummary?
 }
@@ -267,6 +268,7 @@ final class HermesDesktopGatewayClient {
     private var didReceiveReady = false
     private var eventObservers: [UUID: (HermesDesktopGatewayEvent) -> Void] = [:]
     private var connectionGeneration = 0
+    private var profileAvatarCache: [String: Data] = [:]
 
     init(
         configuration: HermesDesktopGatewayConfiguration,
@@ -480,6 +482,57 @@ final class HermesDesktopGatewayClient {
             throw HermesDesktopGatewayError.invalidResponse("profiles.list did not include profiles")
         }
         return rows.compactMap(HermesDesktopGatewayProfile.init(json:))
+    }
+
+    func profileAvatarData(profileName: String, refresh: Bool = false) async throws -> Data? {
+        let normalizedName = profileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedName.isEmpty else { return nil }
+
+        if refresh {
+            profileAvatarCache.removeValue(forKey: normalizedName)
+        } else if let cached = profileAvatarCache[normalizedName] {
+            return cached
+        }
+
+        let result = try await request(
+            method: "profiles.get_asset",
+            params: [
+                "name": .string(normalizedName),
+                "asset": .string("avatar"),
+            ]
+        )
+        guard let object = result.gatewayObjectValue,
+              object["found"]?.gatewayBoolValue == true,
+              let dataURL = object["data"]?.gatewayStringValue,
+              let data = Self.decodeProfileAvatarDataURL(dataURL)
+        else {
+            return nil
+        }
+
+        profileAvatarCache[normalizedName] = data
+        return data
+    }
+
+    nonisolated static func decodeProfileAvatarDataURL(_ value: String) -> Data? {
+        guard value.lowercased().hasPrefix("data:image/"),
+              let comma = value.firstIndex(of: ",")
+        else {
+            return nil
+        }
+
+        let metadata = value[..<comma].lowercased()
+        let payload = String(value[value.index(after: comma)...])
+        if metadata.contains(";base64") {
+            guard let data = Data(base64Encoded: payload, options: .ignoreUnknownCharacters),
+                  !data.isEmpty
+            else {
+                return nil
+            }
+            return data
+        }
+
+        guard let decoded = payload.removingPercentEncoding else { return nil }
+        return decoded.data(using: .utf8)
     }
 
     func createSession(profile: String, title: String? = nil) async throws -> HermesDesktopGatewaySessionSnapshot {
@@ -768,6 +821,7 @@ private extension HermesDesktopGatewayProfile {
             provider: object["provider"]?.gatewayStringValue,
             skillCount: object["skill_count"]?.gatewayIntValue ?? 0,
             isDefault: object["is_default"]?.gatewayBoolValue ?? false,
+            hasAvatar: object["has_avatar"]?.gatewayBoolValue ?? false,
             lastSession: object["last_session"].flatMap(HermesDesktopGatewaySessionSummary.init(json:)),
             workerSession: object["worker_session"].flatMap(HermesDesktopGatewaySessionSummary.init(json:))
         )

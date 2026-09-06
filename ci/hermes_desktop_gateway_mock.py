@@ -17,6 +17,10 @@ from urllib.parse import parse_qs, urlsplit
 
 
 WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+AVATAR_DATA_URL = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
 
 
 def websocket_accept(key: str) -> str:
@@ -81,6 +85,7 @@ class Receipt:
         self.connection_errors: list[str] = []
         self.methods: list[str] = []
         self.profiles_requested = False
+        self.avatar_requests = 0
         self.created_profile: str | None = None
         self.prompt_text: str | None = None
 
@@ -115,6 +120,8 @@ class Receipt:
             self.methods.append(method)
             if method == "profiles.list":
                 self.profiles_requested = params.get("include_sessions") is True
+            elif method == "profiles.get_asset" and params.get("asset") == "avatar":
+                self.avatar_requests += 1
             elif method == "session.create":
                 profile = params.get("profile")
                 self.created_profile = profile if isinstance(profile, str) else None
@@ -133,6 +140,7 @@ class Receipt:
             "connection_errors": self.connection_errors,
             "methods": self.methods,
             "profiles_requested_with_sessions": self.profiles_requested,
+            "avatar_requests": self.avatar_requests,
             "created_profile": self.created_profile,
             "prompt_text": self.prompt_text,
         }
@@ -237,6 +245,7 @@ class HermesGatewayFixture:
                         "provider": "openai",
                         "skill_count": 41,
                         "is_default": True,
+                        "has_avatar": True,
                         "last_session": {
                             "id": "release-session",
                             "resolved_id": "release-session-tip",
@@ -253,6 +262,7 @@ class HermesGatewayFixture:
                         "provider": "openai",
                         "skill_count": 19,
                         "is_default": False,
+                        "has_avatar": True,
                     },
                     {
                         "name": "qa",
@@ -262,9 +272,16 @@ class HermesGatewayFixture:
                         "provider": "openai",
                         "skill_count": 12,
                         "is_default": False,
+                        "has_avatar": True,
                     },
                 ]
             }
+            send_json(connection, {"jsonrpc": "2.0", "id": request_id, "result": result})
+            return
+
+        if method == "profiles.get_asset":
+            found = params.get("name") in {"default", "research", "qa"} and params.get("asset") == "avatar"
+            result = {"found": found, "data": AVATAR_DATA_URL if found else None}
             send_json(connection, {"jsonrpc": "2.0", "id": request_id, "result": result})
             return
 

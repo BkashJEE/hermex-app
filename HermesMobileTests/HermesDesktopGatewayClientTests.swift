@@ -90,7 +90,7 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
         socket.enqueue(
             """
             {"jsonrpc":"2.0","id":\(requestID),"result":{"profiles":[
-              {"name":"default","display_name":"Hermes","is_default":true,"model":"gpt-5","provider":"openai","skill_count":18,
+              {"name":"default","display_name":"Hermes","is_default":true,"has_avatar":true,"model":"gpt-5","provider":"openai","skill_count":18,
                "last_session":{"id":"session-a","resolved_id":"session-a-tip","title":"Release readiness","preview":"Reviewing onboarding notes","last_active":1788552000,"message_count":12}},
               {"name":"research","display_name":"Research","description":"Evidence and source review","model":"gpt-5","provider":"openai","skill_count":9,
                "worker_session":{"id":"worker-1","title":"Source audit","last_active":1788552060,"message_count":3,"source":"tool"}}
@@ -101,13 +101,59 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
         let profiles = try await profilesTask.value
         XCTAssertEqual(profiles.map(\.name), ["default", "research"])
         XCTAssertEqual(profiles[0].displayName, "Hermes")
+        XCTAssertTrue(profiles[0].hasAvatar)
         XCTAssertEqual(profiles[0].lastSession?.resolvedID, "session-a-tip")
         XCTAssertEqual(profiles[1].description, "Evidence and source review")
+        XCTAssertFalse(profiles[1].hasAvatar)
         XCTAssertEqual(profiles[1].workerSession?.source, "tool")
 
         let request = try socket.sentJSON(at: 0)
         XCTAssertEqual(request["method"] as? String, "profiles.list")
         XCTAssertEqual((request["params"] as? [String: Any])?["include_sessions"] as? Bool, true)
+    }
+
+    @MainActor
+    func testLoadsAndCachesProfileAvatarFromGatewayAsset() async throws {
+        let socket = MockHermesDesktopWebSocketTask()
+        let configuration = try HermesDesktopGatewayClient.normalizedConfiguration(
+            serverURLString: "https://gateway.example.com",
+            token: "test-token"
+        )
+        let client = HermesDesktopGatewayClient(configuration: configuration) { _ in socket }
+
+        let connectTask = Task { try await client.connect(timeout: .seconds(1)) }
+        socket.enqueue(#"{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{}}}"#)
+        try await connectTask.value
+
+        let expected = Data("avatar-png".utf8)
+        let avatarTask = Task { try await client.profileAvatarData(profileName: "research") }
+        try await socket.waitForSentMessageCount(1)
+        let requestID = try XCTUnwrap(socket.sentRequestID(at: 0))
+        socket.enqueue(
+            #"{"jsonrpc":"2.0","id":\#(requestID),"result":{"found":true,"data":"data:image/png;base64,\#(expected.base64EncodedString())"}}"#
+        )
+
+        XCTAssertEqual(try await avatarTask.value, expected)
+        XCTAssertEqual(try await client.profileAvatarData(profileName: "research"), expected)
+        XCTAssertThrowsError(
+            try socket.sentJSON(at: 1),
+            "The second read should use the in-memory avatar cache"
+        )
+
+        let request = try socket.sentJSON(at: 0)
+        XCTAssertEqual(request["method"] as? String, "profiles.get_asset")
+        XCTAssertEqual((request["params"] as? [String: Any])?["name"] as? String, "research")
+        XCTAssertEqual((request["params"] as? [String: Any])?["asset"] as? String, "avatar")
+    }
+
+    func testRejectsNonImageAndMalformedProfileAvatarDataURLs() {
+        XCTAssertNil(HermesDesktopGatewayClient.decodeProfileAvatarDataURL("https://example.test/avatar.png"))
+        XCTAssertNil(HermesDesktopGatewayClient.decodeProfileAvatarDataURL("data:text/plain;base64,SGVsbG8="))
+        XCTAssertNil(HermesDesktopGatewayClient.decodeProfileAvatarDataURL("data:image/png;base64,%%%"))
+        XCTAssertEqual(
+            HermesDesktopGatewayClient.decodeProfileAvatarDataURL("data:image/svg+xml,%3Csvg%3E%3C%2Fsvg%3E"),
+            Data("<svg></svg>".utf8)
+        )
     }
 
     @MainActor
@@ -255,7 +301,11 @@ final class HermesDesktopGatewayClientTests: XCTestCase {
         let profiles = try await client.listProfiles(includeSessions: true)
         XCTAssertEqual(profiles.map(\.name), ["default", "research", "qa"])
         XCTAssertTrue(profiles[0].isDefault)
+        XCTAssertTrue(profiles.allSatisfy(\.hasAvatar))
         XCTAssertEqual(profiles[0].lastSession?.resolvedID, "release-session-tip")
+        for profile in profiles {
+            XCTAssertNotNil(try await client.profileAvatarData(profileName: profile.name))
+        }
 
         let session = try await client.createSession(profile: "research", title: "Mobile gateway proof")
         XCTAssertEqual(session.runtimeSessionID, "runtime-mobile-ci")
